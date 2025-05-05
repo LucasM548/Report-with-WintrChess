@@ -664,6 +664,31 @@
                     return resolve(null);
                 }
                 
+                // Fonction pour fermer le panneau de partage
+                const closeSharePanel = () => {
+                    try {
+                        // Utiliser le sélecteur spécifique fourni par l'utilisateur
+                        const closeButton = document.querySelector('button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]');
+                        
+                        // Fallback avec d'autres sélecteurs possibles si le premier ne fonctionne pas
+                        if (closeButton) {
+                            closeButton.click();
+                            console.log('Panneau de partage fermé avec le sélecteur spécifique');
+                        } else {
+                            // Essayer avec des sélecteurs plus génériques
+                            const genericCloseButton = document.querySelector('.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]');
+                            if (genericCloseButton) {
+                                genericCloseButton.click();
+                                console.log('Panneau de partage fermé avec un sélecteur générique');
+                            } else {
+                                console.error('Bouton de fermeture non trouvé malgré les différents sélecteurs essayés');
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Erreur lors de la fermeture du panneau:', e);
+                    }
+                };
+                
                 // 2. Attendre que le panneau apparaisse puis cliquer sur l'onglet PGN
                 setTimeout(() => {
                     // Cibler précisément le bouton fourni par l'utilisateur
@@ -675,30 +700,51 @@
                         
                         // 3. Attendre que le contenu PGN apparaisse et l'extraire
                         setTimeout(() => {
-                            const textarea = document.querySelector('textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]');
-                            
-                            if (textarea && textarea.value) {
-                                console.log('PGN trouvé!');
-                                const pgn = textarea.value;
+                            try {
+                                const textarea = document.querySelector('textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]');
                                 
-                                // 4. Fermer le panneau de partage
-                                const closeButton = document.querySelector('.share-menu-close, button[aria-label="Close"]');
-                                if (closeButton) closeButton.click();
+                                let pgn = null;
+                                if (textarea && textarea.value) {
+                                    console.log('PGN trouvé!');
+                                    pgn = textarea.value;
+                                } else {
+                                    console.error('Textarea PGN non trouvé ou vide');
+                                }
                                 
+                                // Toujours fermer le panneau de partage, que le PGN ait été trouvé ou non
+                                closeSharePanel();
+                                
+                                // Retourner le PGN (ou null s'il n'a pas été trouvé)
                                 return resolve(pgn);
-                            } else {
-                                console.error('Textarea PGN non trouvé ou vide');
+                            } catch (error) {
+                                console.error('Erreur lors de l\'extraction du PGN:', error);
+                                closeSharePanel();
                                 return resolve(null);
                             }
                         }, 1000); // Délai généreux pour s'assurer que le PGN est chargé
                     } else {
                         console.error('Bouton PGN non trouvé');
+                        closeSharePanel();
                         return resolve(null);
                     }
                 }, 500);
                 
             } catch (error) {
                 console.error('Erreur lors de l\'extraction du PGN:', error);
+                // Tenter de fermer le panneau même en cas d'erreur générale
+                setTimeout(() => {
+                    try {
+                        // Utiliser le même sélecteur spécifique que dans closeSharePanel
+                        const closeButton = document.querySelector('button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]');
+                        if (closeButton) {
+                            closeButton.click();
+                        } else {
+                            // Fallback avec des sélecteurs génériques
+                            const genericCloseButton = document.querySelector('.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]');
+                            if (genericCloseButton) genericCloseButton.click();
+                        }
+                    } catch (e) { /* Ignorer les erreurs lors de la fermeture */ }
+                }, 500);
                 return resolve(null);
             }
         });
