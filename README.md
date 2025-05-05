@@ -12,8 +12,8 @@ This Tampermonkey script allows you to easily transfer your chess games from **L
 - One-click transfer to WintrChess
 - Works on completed games or during analysis
 
-Chess.com : ![image](https://github.com/user-attachments/assets/e9563ffb-32fb-4a8d-a2e8-651bbd49b0d4)
-Lichess : ![image](https://github.com/user-attachments/assets/113ba51b-7539-47a2-bf96-dea6679b2d8f)
+- **Chess.com** : ![image](https://github.com/user-attachments/assets/e9563ffb-32fb-4a8d-a2e8-651bbd49b0d4)
+- **Lichess** : ![image](https://github.com/user-attachments/assets/113ba51b-7539-47a2-bf96-dea6679b2d8f)
 
 
 ## 🚀 Installation
