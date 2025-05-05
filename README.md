@@ -2,7 +2,7 @@
 
 This Tampermonkey script allows you to easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrChess](https://wintrchess.com/)** for in-depth analysis.
 
-**[Video Presantation of WintrChess](https://wintrchess.com/)**
+**[Video Presantation of WintrChess](https://youtu.be/rT5isX7mQds?si=6taY4ExPdrVeVkfr)**
 
 ## ✨ Features
 
