@@ -6,11 +6,9 @@
 // @include      /^https\:\/\/lichess\.org\/[a-zA-Z0-9]{8,}/
 // @include      /^https\:\/\/lichess\.org\/study\/.*/
 // @include      /^https\:\/\/lichess\.org\/analysis.*/
-// @include      /^https\:\/\/www\.chess\.com\/game\/live\/.*/
 // @include      /^https\:\/\/www\.chess\.com\/game\/daily\/.*/
 // @include      /^https\:\/\/www\.chess\.com\/game\/computer\/.*/
 // @include      /^https\:\/\/www\.chess\.com\/analysis.*/
-// @include      /^https\:\/\/www\.chess\.com\/play\/.*/
 // @include      /^https\:\/\/www\.chess\.com\/game\/.*/
 // @match        https://wintrchess.com/*
 // @grant        GM_setValue

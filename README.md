@@ -44,7 +44,6 @@ This Tampermonkey script allows you to easily transfer your chess games from **L
   - Analysis pages (`lichess.org/analysis`)
 
 - **Chess.com**:
-  - Live games (`chess.com/game/live`)
   - Daily games (`chess.com/game/daily`)
   - Computer games (`chess.com/game/computer`)
   - Analysis pages (`chess.com/analysis`)
