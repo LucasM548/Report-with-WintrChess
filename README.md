@@ -58,10 +58,6 @@ This script is made possible thanks to the incredible work of [WintrCat](https:/
 
 This script was developed with the assistance of AI to help implement the best practices for PGN extraction and web integration.
 
-## 📝 License
-
-MIT License
-
 ## 🐛 Report an Issue
 
 If you encounter any problems with this script, please open an issue on this GitHub repository.
