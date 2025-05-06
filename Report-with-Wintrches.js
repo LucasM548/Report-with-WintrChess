@@ -146,21 +146,18 @@
 
   async function getPgnFromLichess() {
     const pageInfo = getLichessPageInfo();
-
-    // Méthode 1: API Lichess (pour les parties uniquement)
+    
     if (pageInfo.gameId) {
       try {
-        const pgn = await fetchPgnFromApi(pageInfo.gameId);
-        if (pgn) return pgn;
+        return await fetchPgnFromApi(pageInfo.gameId);
       } catch (error) {
-        console.log(
-          "Couldn't fetch PGN via API, falling back to scraping methods",
-        );
+        console.error("Erreur lors de la récupération du PGN via API:", error);
+        return null;
       }
     }
-
-    // Si l'API échoue ou n'est pas disponible, on essaie différentes méthodes de scraping
-    return scrapePgnFromPage();
+    
+    console.log("Impossible de récupérer le PGN: pas d'identifiant de partie détecté");
+    return null;
   }
 
   function fetchPgnFromApi(gameId) {
@@ -196,116 +193,6 @@
     });
   }
 
-  function scrapePgnFromPage() {
-    const scrapingMethods = [
-      // Méthode 1: Données intégrées (analyse)
-      () => {
-        const element = document.querySelector(
-          ".analyse__data, #main-wrap[data-round]",
-        );
-        if (element?.dataset?.round) {
-          try {
-            const data = JSON.parse(element.dataset.round);
-            if (data?.pgn) return data.pgn.trim();
-          } catch (e) {}
-        }
-        return null;
-      },
-
-      // Méthode 2: Données intégrées (étude)
-      () => {
-        const element = document.querySelector("#analyse-cm");
-        if (element?.dataset?.payload) {
-          try {
-            const data = JSON.parse(element.dataset.payload);
-            if (data?.data?.game?.pgn) return data.data.game.pgn.trim();
-            if (data?.data?.chapter?.pgn) return data.data.chapter.pgn.trim();
-          } catch (e) {}
-        }
-        return null;
-      },
-
-      // Méthode 3: Contenu texte de la div.pgn
-      () => {
-        const element = document.querySelector("div.pgn");
-        if (element?.textContent) {
-          const text = element.textContent.trim();
-          if (text.startsWith("[Event") || /^\s*1\./.test(text)) {
-            return text;
-          }
-        }
-        return null;
-      },
-
-      // Méthode 4: Textarea dans l'onglet PGN
-      () => {
-        const element = document.querySelector("div.pgn textarea");
-        if (element?.value) return element.value.trim();
-        return null;
-      },
-
-      // Méthode 5: Lien de téléchargement
-      () => {
-        const element = document.querySelector(
-          ".pgn .download, .gamebook .download a",
-        );
-        if (element?.href?.startsWith("data:")) {
-          try {
-            let pgnData = "";
-            if (element.href.startsWith("data:text/plain;charset=utf-8,")) {
-              pgnData = decodeURIComponent(
-                element.href.substring("data:text/plain;charset=utf-8,".length),
-              );
-            } else if (
-              element.href.startsWith(
-                "data:application/x-chess-pgn;charset=utf-8,",
-              )
-            ) {
-              pgnData = decodeURIComponent(
-                element.href.substring(
-                  "data:application/x-chess-pgn;charset=utf-8,".length,
-                ),
-              );
-            }
-
-            if (pgnData) {
-              // Nettoyer les métadonnées inutiles
-              pgnData = pgnData.replace(/\[Annotator.*?\]\s*?\n?/g, "");
-              pgnData = pgnData.replace(/\[PlyCount.*?\]\s*?\n?/g, "");
-              return pgnData.trim();
-            }
-          } catch (e) {}
-        }
-        return null;
-      },
-
-      // Méthode 6: FEN de l'éditeur de position
-      () => {
-        // Si nous sommes sur la page d'analyse, nous pouvons essayer de récupérer au moins la position FEN
-        if (window.location.pathname.includes("/analysis")) {
-          const fenInput = document.querySelector("input.copyable");
-          if (fenInput?.value && fenInput.value.includes(" ")) {
-            const fen = fenInput.value.trim();
-            // Créer un PGN minimal avec la position FEN
-            return `[Event "Analysis"]\n[Site "https://lichess.org${window.location.pathname}"]\n[Date "${new Date().toISOString().slice(0, 10)}"]\n[White "?"]\n[Black "?"]\n[Result "*"]\n[SetUp "1"]\n[FEN "${fen}"]\n\n*`;
-          }
-        }
-        return null;
-      },
-    ];
-
-    // Essayer chaque méthode jusqu'à ce qu'une fonctionne
-    for (const method of scrapingMethods) {
-      try {
-        const pgn = method();
-        if (pgn) return pgn;
-      } catch (e) {
-        // Continuer avec la méthode suivante
-      }
-    }
-
-    return null;
-  }
 
   function createWintrButton() {
     const wintrButton = document.createElement("button");
@@ -631,41 +518,31 @@
     }
 
     STATE.observer = new MutationObserver((mutationsList) => {
-      if (STATE.buttonAdded && document.querySelector(".wintchess-button"))
-        return;
-
+      // Ne rien faire si le bouton existe déjà
+      if (STATE.buttonAdded && document.querySelector(".wintchess-button")) return;
+      
+      // Réinitialiser l'état si le bouton a disparu
       if (STATE.buttonAdded && !document.querySelector(".wintchess-button")) {
         STATE.buttonAdded = false;
       }
 
-      const hasRelevantChanges = mutationsList.some((m) => {
-        // Vérifier si une modale de fin de partie est ajoutée
+      // Vérifier la présence de la modale de fin de partie
+      for (const m of mutationsList) {
         if (m.type === "childList" && m.addedNodes.length > 0) {
           for (const node of m.addedNodes) {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              if (
-                node.querySelector &&
-                (node.querySelector(".game-over-modal-content") ||
-                  node.classList?.contains("game-over-modal-content") ||
-                  node.querySelector(".game-over-modal-buttons") ||
-                  node.querySelector(".game-over-review-button-component"))
-              ) {
-                // Essayer d'ajouter le bouton avec une légère temporisation pour s'assurer que la modale est complètement chargée
+            if (node.nodeType === Node.ELEMENT_NODE && node.querySelector) {
+              if (node.querySelector(".game-over-modal-content") || 
+                  node.classList?.contains("game-over-modal-content")) {
                 setTimeout(() => tryAddButtonToGameOverModal(), 300);
-                return true;
+                return;
               }
             }
           }
         }
-        return (
-          (m.type === "childList" && m.addedNodes.length > 0) ||
-          m.type === "attributes"
-        );
-      });
-
-      if (hasRelevantChanges) {
-        tryAddChessComButton();
       }
+
+      // Pour tout autre changement, essayer d'ajouter le bouton normal
+      tryAddChessComButton();
     });
 
     STATE.observer.observe(document.body, {
@@ -678,19 +555,13 @@
 
   async function getPgnFromChessCom() {
     try {
-      // Utilisation de la méthode du panneau de partage
-      const pgnFromShare = await getPgnFromSharePanel();
-      if (pgnFromShare) {
-        console.log("PGN récupéré depuis le panneau de partage");
-        return pgnFromShare;
+      const pgn = await getPgnFromSharePanel();
+      if (pgn) {
+        return pgn;
       }
-
-      console.error("Échec de l'extraction du PGN via le panneau de partage");
-
-      // Si vraiment tout a échoué
       throw new Error("Impossible de récupérer le PGN depuis la page Chess.com");
     } catch (error) {
-      console.error("Erreur lors de l'extraction du PGN", error);
+      console.error("Erreur lors de l'extraction du PGN:", error);
       throw error;
     }
   }
@@ -699,133 +570,67 @@
   async function getPgnFromSharePanel() {
     return new Promise((resolve) => {
       try {
-        console.log(
-          "Tentative directe d'extraction du PGN via le panneau de partage",
-        );
-
         // 1. Ouvrir le panneau de partage
         const shareButtons = document.querySelectorAll(
-          'button[aria-label="Share"], .icon-font-chess.share, [data-cy="share-button"]',
+          'button[aria-label="Share"], .icon-font-chess.share, [data-cy="share-button"]'
         );
+        
         let shareClicked = false;
-
         for (const btn of shareButtons) {
           try {
             btn.click();
             shareClicked = true;
-            console.log("Panneau de partage ouvert");
             break;
-          } catch (e) {
-            /* Continuer avec le prochain bouton */
-          }
+          } catch (e) {}
         }
 
         if (!shareClicked) {
-          console.error("Impossible d'ouvrir le panneau de partage");
           return resolve(null);
         }
 
         // Fonction pour fermer le panneau de partage
         const closeSharePanel = () => {
           try {
-            // Utiliser le sélecteur spécifique fourni par l'utilisateur
             const closeButton = document.querySelector(
-              'button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]',
-            );
-
-            // Fallback avec d'autres sélecteurs possibles si le premier ne fonctionne pas
-            if (closeButton) {
-              closeButton.click();
-              console.log(
-                "Panneau de partage fermé avec le sélecteur spécifique",
-              );
-            } else {
-              // Essayer avec des sélecteurs plus génériques
-              const genericCloseButton = document.querySelector(
-                '.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]',
-              );
-              if (genericCloseButton) {
-                genericCloseButton.click();
-                console.log(
-                  "Panneau de partage fermé avec un sélecteur générique",
-                );
-              } else {
-                console.error(
-                  "Bouton de fermeture non trouvé malgré les différents sélecteurs essayés",
-                );
-              }
-            }
-          } catch (e) {
-            console.error("Erreur lors de la fermeture du panneau:", e);
-          }
+              'button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]'
+            ) || document.querySelector('.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]');
+            
+            if (closeButton) closeButton.click();
+          } catch (e) {}
         };
 
         // 2. Attendre que le panneau apparaisse puis cliquer sur l'onglet PGN
         setTimeout(() => {
-          // Cibler précisément le bouton fourni par l'utilisateur
           const pgnButton = document.querySelector(
-            'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
+            'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]'
           );
 
           if (pgnButton) {
-            console.log("Bouton PGN trouvé, clic...");
             pgnButton.click();
 
             // 3. Attendre que le contenu PGN apparaisse et l'extraire
             setTimeout(() => {
               try {
                 const textarea = document.querySelector(
-                  'textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]',
+                  'textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]'
                 );
 
-                let pgn = null;
-                if (textarea && textarea.value) {
-                  console.log("PGN trouvé!");
-                  pgn = textarea.value;
-                } else {
-                  console.error("Textarea PGN non trouvé ou vide");
-                }
-
-                // Toujours fermer le panneau de partage, que le PGN ait été trouvé ou non
+                const pgn = textarea?.value || null;
                 closeSharePanel();
-
-                // Retourner le PGN (ou null s'il n'a pas été trouvé)
-                return resolve(pgn);
+                resolve(pgn);
               } catch (error) {
-                console.error("Erreur lors de l'extraction du PGN:", error);
                 closeSharePanel();
-                return resolve(null);
+                resolve(null);
               }
-            }, 1000); // Délai généreux pour s'assurer que le PGN est chargé
+            }, 1000);
           } else {
-            console.error("Bouton PGN non trouvé");
             closeSharePanel();
-            return resolve(null);
+            resolve(null);
           }
         }, 500);
       } catch (error) {
-        console.error("Erreur lors de l'extraction du PGN:", error);
-        // Tenter de fermer le panneau même en cas d'erreur générale
-        setTimeout(() => {
-          try {
-            // Utiliser le même sélecteur spécifique que dans closeSharePanel
-            const closeButton = document.querySelector(
-              'button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]',
-            );
-            if (closeButton) {
-              closeButton.click();
-            } else {
-              // Fallback avec des sélecteurs génériques
-              const genericCloseButton = document.querySelector(
-                '.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]',
-              );
-              if (genericCloseButton) genericCloseButton.click();
-            }
-          } catch (e) {
-            /* Ignorer les erreurs lors de la fermeture */
-          }
-        }, 500);
-        return resolve(null);
+        setTimeout(closeSharePanel, 500);
+        resolve(null);
       }
     });
   }
