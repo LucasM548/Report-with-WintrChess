@@ -1146,56 +1146,6 @@
       }
     }
 
-    // Si on n'a pas pu insérer directement, essayer les sélecteurs génériques
-    if (!STATE.buttonAdded) {
-      // Sinon, utiliser les sélecteurs génériques comme avant
-      let targetSelectors = [
-        {
-          selector:
-            ".cc-modal-content-component, .review-sidebar-module, .post-game-dialog-content",
-          method: "appendChild",
-          priority: 9,
-        },
-        {
-          selector:
-            ".board-controls-panel, .game-controls-panel, .layout-bottom-panel",
-          method: "appendChild",
-          priority: 8,
-        },
-        {
-          selector:
-            ".board-layout-main, .analysis-diagram-container, .analysis-controls",
-          method: "appendChild",
-          priority: 7,
-        },
-        {
-          selector: ".game-controls, .board-controls",
-          method: "appendChild",
-          priority: 6,
-        },
-        {
-          selector: ".sidebar-tabset, .sidebar-tabsetContent, .review-sidebar",
-          method: "appendChild",
-          priority: 5,
-        },
-        {
-          selector: ".game-over-modal-content, .game-result-component",
-          method: "appendChild",
-          priority: 4,
-        },
-        {
-          selector: ".board-layout-sidebar, .layout-sidebar-main",
-          method: "appendChild",
-          priority: 3,
-        },
-        {
-          selector: ".header-control-buttons, .board-controls-extra",
-          method: "appendChild",
-          priority: 2,
-        },
-      ];
-    }
-
     // Trier les sélecteurs par priorité si définie
     const sortedSelectors = targetSelectors.sort(
       (a, b) => (b.priority || 0) - (a.priority || 0),
