@@ -1,8 +1,12 @@
-// Content script pour l'extension Chess Sites to WintrChess
 (function () {
   "use strict";
 
   // Configuration
+  // Contenu SVG réutilisable pour tous les boutons
+  const CHESS_ICON_SVG = `<svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
+  </svg>`;
+
   const CONFIG = {
     WINTRCHESS_URL: "https://wintrchess.com/",
     PGN_STORAGE_KEY: "wintrChessPgnToPaste",
@@ -45,13 +49,14 @@
     },
   };
 
-  // État global
+  // État global optimisé avec Map pour de meilleures performances
   const STATE = {
     buttonAdded: false,
     observer: null,
     lastAttemptTime: 0,
     platform: null, // 'lichess' ou 'chess.com'
-    buttonInstances: {}, // Pour garder une trace des boutons par type et emplacement
+    buttonInstances: new Map(), // Map pour garder une trace des boutons par type et emplacement
+    platformDetected: false,  // Indique si la plateforme a été détectée et traitée
   };
 
   // Remplacements pour les fonctions TamperMonkey
@@ -75,14 +80,7 @@
     }
   };
 
-  // Fonction utilitaire de debounce
-  const debounce = (fn, delay) => {
-    let timer = null;
-    return function (...args) {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn.apply(this, args), delay);
-    };
-  };
+  // On utilise maintenant Utils.debounce
 
   // Détermine si nous sommes sur une page Lichess, Chess.com ou WintrChess et agit en conséquence
   function init() {
@@ -102,27 +100,32 @@
 
     if (pageInfo.isRelevantPage) {
       STATE.platform = "lichess";
-      setupMutationObserver(tryAddButton);
+      
+      DomObserverManager.setupObserver(tryAddButton, "lichess");
+      
       tryAddButton();
 
-      window.addEventListener("load", () =>
-        setTimeout(tryAddButton, CONFIG.RETRY_DELAY),
-      );
+      const loadHandler = Utils.debounce(() => tryAddButton(), CONFIG.RETRY_DELAY);
+      window.addEventListener("load", loadHandler);
+      
       window.addEventListener("hashchange", () => {
-        // Réinitialiser les boutons lors d'un changement de page
         ButtonManager.removeAllButtons();
-        setTimeout(tryAddButton, CONFIG.RETRY_DELAY);
+        loadHandler();
       });
 
-      // Vérification périodique
-      setInterval(() => {
-        if (
-          !STATE.buttonAdded ||
-          !document.querySelector(".wintchess-button")
-        ) {
+      const periodicCheck = setInterval(() => {
+        if (document.visibilityState === "hidden") {
+          return;
+        }
+        
+        if (!STATE.buttonAdded || !document.querySelector(".wintchess-button")) {
           tryAddButton();
         }
       }, CONFIG.BUTTON_CHECK_INTERVAL);
+      
+      window.addEventListener("beforeunload", () => {
+        clearInterval(periodicCheck);
+      });
     }
   }
 
@@ -154,73 +157,145 @@
     return { isRelevantPage, gameId, studyId };
   }
 
-  function setupMutationObserver(callback) {
-    if (STATE.observer) {
-      STATE.observer.disconnect();
-    }
-
-    // Création d'une fonction de callback
-    const optimizedCallback = debounce((mutationsList) => {
-      if (document.querySelector(".wintchess-button")) return;
-
-      const hasRelevantChanges = mutationsList.some(
-        (m) =>
-          (m.type === "childList" && m.addedNodes.length > 0) ||
-          (m.type === "attributes" && isRelevantElement(m.target)),
-      );
-
-      if (hasRelevantChanges) {
-        callback();
+  const DomObserverManager = {
+    // Tableau des éléments considérés comme pertinents par plateforme
+    relevantClassesByPlatform: {
+      'lichess': [
+        "analyse__tools", "study__tools", "analyse__underboard", 
+        "puzzle__tools", "game-over-modal-content"
+      ],
+      'chess.com': [
+        "board-controls", "game-controls", "post-game-controls", 
+        "game-over-modal-content", "analysis-controls"
+      ]
+    },
+    
+    relevantSelectors: null,
+    
+    setupObserver(callback, platform = STATE.platform) {
+      this.disconnectExisting();
+      
+      this.relevantSelectors = new Set(this.relevantClassesByPlatform[platform] || []);
+      
+      const optimizedCallback = Utils.debounce((mutationsList) => {
+        // Éviter de traiter si un bouton existe déjà
+        if (document.querySelector(".wintchess-button")) return;
+        
+        const hasRelevantChanges = mutationsList.some(mutation =>
+          (mutation.type === "childList" && mutation.addedNodes.length > 0) ||
+          (mutation.type === "attributes" && this.isRelevantElement(mutation.target, platform))
+        );
+        
+        if (hasRelevantChanges) {
+          callback();
+        }
+      }, CONFIG.DEBOUNCE_DELAY);
+      
+      STATE.observer = new MutationObserver(optimizedCallback);
+      
+      STATE.observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class"],  // Ne surveiller que les changements de classe
+      });
+    },
+    
+    disconnectExisting() {
+      if (STATE.observer) {
+        STATE.observer.disconnect();
+        STATE.observer = null;
       }
-    }, CONFIG.DEBOUNCE_DELAY);
-
-    STATE.observer = new MutationObserver(optimizedCallback);
-
-    STATE.observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "style", "id"],
-    });
-  }
-
-  function isRelevantElement(element) {
-    if (!element || !element.classList) return false;
-
-    const relevantClasses = [
-      "analyse__tools",
-      "study__tools",
-      "analyse__underboard",
-      "puzzle__tools",
-      "game-over-modal-content",
-    ];
-
-    return relevantClasses.some((cls) => element.classList.contains(cls));
-  }
-
-  async function getPgnFromLichess() {
-    const pageInfo = getLichessPageInfo();
-
-    if (!pageInfo.gameId) {
-      console.log(
-        "Impossible de récupérer le PGN: pas d'identifiant de partie détecté",
-      );
-      return null;
+    },
+    
+    isRelevantElement(element, platform) {
+      if (!element || !element.classList) return false;
+      
+      for (const cls of element.classList) {
+        if (this.relevantSelectors.has(cls)) {
+          return true;
+        }
+      }
+      
+      return false;
     }
+  };
 
-    try {
-      return await fetchPgnFromApi(pageInfo.gameId);
-    } catch (error) {
-      console.error("Erreur lors de la récupération du PGN via API:", error);
-      return null;
+  const PgnExtractor = {
+    _cache: new Map(),
+    _cacheDuration: 60000, // Durée de validité du cache
+    
+    // Efface une entrée du cache après un certain temps
+    _setCacheWithExpiry(key, value) {
+      if (!value) return;
+      
+      const cacheItem = {
+        value,
+        timestamp: Date.now()
+      };
+      
+      this._cache.set(key, cacheItem);
+      
+      // Planifier la suppression du cache
+      setTimeout(() => {
+        if (this._cache.has(key)) {
+          this._cache.delete(key);
+        }
+      }, this._cacheDuration);
+    },
+    
+    // Vérifie si une entrée du cache est encore valide
+    _getFromCache(key) {
+      const cacheItem = this._cache.get(key);
+      
+      if (!cacheItem) return null;
+      
+      // Vérifier si le cache est expiré
+      const now = Date.now();
+      if (now - cacheItem.timestamp > this._cacheDuration) {
+        this._cache.delete(key);
+        return null;
+      }
+      
+      return cacheItem.value;
+    },
+    
+    // Extraction pour Lichess
+    async fromLichess() {
+      const pageInfo = getLichessPageInfo();
+      
+      if (!pageInfo.gameId) {
+        console.log("Impossible de récupérer le PGN: pas d'identifiant de partie détecté");
+        return null;
+      }
+      
+      // Vérifier le cache d'abord
+      const cacheKey = `lichess_${pageInfo.gameId}`;
+      const cachedPgn = this._getFromCache(cacheKey);
+      if (cachedPgn) {
+        console.log("PGN récupéré depuis le cache");
+        return cachedPgn;
+      }
+      
+      try {
+        const pgn = await fetchPgnFromApi(pageInfo.gameId);
+        if (pgn) {
+          this._setCacheWithExpiry(cacheKey, pgn);
+        }
+        return pgn;
+      } catch (error) {
+        console.error("Erreur lors de la récupération du PGN via API:", error);
+        return null;
+      }
     }
-  }
+  };
 
+  // Méthode d'extraction depuis l'API Lichess
   function fetchPgnFromApi(gameId) {
     const apiUrl = `https://lichess.org/game/export/${gameId}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
 
     return new Promise((resolve, reject) => {
-      // Remplaçement de GM_xmlhttpRequest par une communication avec le background script
+      // Communication avec le background script
       chrome.runtime.sendMessage(
         { action: "fetchPgn", url: apiUrl },
         response => {
@@ -234,52 +309,57 @@
     });
   }
 
-  // Fonction réutilisable pour créer un bouton
-  function createButton(options) {
-    const { className, style, innerHTML, onClick } = options;
+  // Factory pour la création de boutons
+  const ButtonFactory = {
+    create(options) {
+      const { className, style, innerHTML, onClick } = options;
 
-    const button = document.createElement("button");
-    button.className = className + " wintchess-button";
-    button.style.cssText = style;
-    button.innerHTML = innerHTML;
-
-    button.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      button.disabled = true;
-
-      const textElement = button.querySelector(".button-text") || button;
-      const originalText = textElement.textContent;
-      textElement.textContent = "Récupération du PGN...";
-
-      try {
-        const pgn = await onClick();
-        if (pgn) {
-          await chromeStorage.setValue(CONFIG.PGN_STORAGE_KEY, pgn);
-          // Ouvrir wintrchess dans un nouvel onglet via le background script
-          chrome.runtime.sendMessage(
-            { action: "openWintrChess", url: CONFIG.WINTRCHESS_URL }
-          );
-        } else {
-          showNotification("Impossible de récupérer le PGN");
+      const button = document.createElement("button");
+      button.className = className + " wintchess-button";
+      button.style.cssText = style;
+      button.innerHTML = innerHTML;
+      
+      this.attachEventHandler(button, onClick);
+      return button;
+    },
+    
+    attachEventHandler(button, onClickHandler) {
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        button.disabled = true;
+        
+        const textElement = button.querySelector(".button-text") || button;
+        const originalText = textElement.textContent;
+        textElement.textContent = "Récupération du PGN...";
+        
+        try {
+          const pgn = await onClickHandler();
+          if (pgn) {
+            await chromeStorage.setValue(CONFIG.PGN_STORAGE_KEY, pgn);
+            chrome.runtime.sendMessage({
+              action: "openWintrChess",
+              url: CONFIG.WINTRCHESS_URL
+            });
+          } else {
+            NotificationManager.show("Impossible de récupérer le PGN");
+          }
+        } catch (error) {
+          console.error("Erreur:", error);
+          NotificationManager.show("Erreur lors de la récupération du PGN");
+        } finally {
+          // Restauration différée de l'état du bouton
+          setTimeout(() => {
+            button.disabled = false;
+            textElement.textContent = originalText;
+          }, 1000);
         }
-      } catch (error) {
-        console.error("Erreur:", error);
-        showNotification("Erreur lors de la récupération du PGN");
-      } finally {
-        // Rétablir l'état du bouton
-        setTimeout(() => {
-          button.disabled = false;
-          textElement.textContent = originalText;
-        }, 1000);
-      }
-    });
-
-    return button;
-  }
+      });
+    }
+  };
 
   // Création de bouton Lichess
   function createLichessButton() {
-    return createButton({
+    return ButtonFactory.create({
       className: "button button-metal",
       style: `
       display: block;
@@ -288,13 +368,13 @@
       padding: 5px 10px;
     `,
       innerHTML: `<span class="button-text">${CONFIG.BUTTON_TEXT}</span>`,
-      onClick: getPgnFromLichess,
+      onClick: () => PgnExtractor.fromLichess(),
     });
   }
 
   // Création de bouton Chess.com
   function createChessComButton() {
-    return createButton({
+    return ButtonFactory.create({
       className:
         "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
       style: `
@@ -304,9 +384,7 @@
     `,
       innerHTML: `
       <span class="cc-icon-glyph cc-icon-large cc-button-icon">
-        <svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
-        </svg>
+        ${CHESS_ICON_SVG}
       </span>
       <span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>
     `,
@@ -316,7 +394,7 @@
 
   // Fonction pour créer un bouton pour la fenêtre modale de fin de partie
   function createGameOverWintrButton() {
-    return createButton({
+    return ButtonFactory.create({
       className:
         "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
       style: `
@@ -325,9 +403,7 @@
       `,
       innerHTML: `
         <span class="cc-icon-glyph cc-icon-large cc-button-icon">
-            <svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
-            </svg>
+          ${CHESS_ICON_SVG}
         </span>
         <span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>
       `,
@@ -337,7 +413,6 @@
 
   // Tente d'ajouter le bouton à la fenêtre modale de fin de partie
   function tryAddButtonToGameOverModal() {
-    // Vérifier si la modale de fin de partie est présente
     const gameOverModal = document.querySelector(".game-over-modal-content");
     if (!gameOverModal) return false;
 
@@ -361,18 +436,15 @@
                 margin-top: 10px;
             `;
 
-      // Ajouter un label comme pour le bouton bilan
       const label = document.createElement("span");
       label.className = "game-over-review-button-label";
       label.textContent = CONFIG.BUTTON_TEXT;
       wintrButtonContainer.appendChild(label);
 
-      // Créer notre bouton avec le style approprié
       const wintrButton = createGameOverWintrButton();
       wintrButton.classList.add("game-over-review-button-background");
       wintrButtonContainer.appendChild(wintrButton);
 
-      // Insérer notre conteneur juste après celui du bouton bilan
       if (gameOverButtons) {
         // Insérer juste après le premier bouton et avant les boutons secondaires
         gameOverButtons.insertBefore(
@@ -394,45 +466,58 @@
     return false;
   }
 
-  // Notifications améliorées
-  const showNotification = (() => {
-    let currentNotification = null;
-
-    return (message) => {
-      // Supprimer toute notification existante
-      if (currentNotification) {
-        currentNotification.remove();
-      }
-
-      const notification = document.createElement("div");
-      notification.textContent = message;
-      notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 20px;
-      background-color: #333;
-      color: white;
-      border-radius: 4px;
-      z-index: 10000;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      opacity: 1;
-      transition: opacity 0.5s ease;
-    `;
-
-      document.body.appendChild(notification);
-      currentNotification = notification;
-
-      setTimeout(() => {
-        notification.style.opacity = "0";
-        setTimeout(() => {
-          notification.remove();
-          if (currentNotification === notification) {
-            currentNotification = null;
+  // Gestionnaire de notifications optimisé
+  const NotificationManager = (() => {
+    let activeNotification = null;
+    let timerId = null;
+    
+    return {
+      show(message, duration = 3000) {
+        this.clear();
+        
+        const notification = document.createElement("div");
+        notification.textContent = message;
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 10px 20px;
+          background-color: #333;
+          color: white;
+          border-radius: 4px;
+          z-index: 10000;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          opacity: 1;
+          transition: opacity 0.5s ease;
+        `;
+        
+        document.body.appendChild(notification);
+        activeNotification = notification;
+        
+        timerId = setTimeout(() => this.hide(), duration);
+      },
+      
+      hide() {
+        if (!activeNotification) return;
+        
+        activeNotification.style.opacity = "0";
+        setTimeout(() => this.clear(), 500);
+      },
+      
+      clear() {
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = null;
+        }
+        
+        if (activeNotification) {
+          if (activeNotification.parentNode) {
+            activeNotification.parentNode.removeChild(activeNotification);
           }
-        }, 500);
-      }, 3000);
+          activeNotification = null;
+        }
+      }
     };
   })();
 
@@ -456,28 +541,40 @@
 
     if (pageInfo.isRelevantPage) {
       STATE.platform = "chess.com";
+      
       setupChessComMutationObserver(tryAddChessComButton);
+      
       tryAddChessComButton();
 
-      // Ajouter des points d'entrée supplémentaires pour s'assurer que le bouton est ajouté
-      window.addEventListener("load", () =>
-        setTimeout(tryAddChessComButton, CONFIG.RETRY_DELAY),
-      );
+      const loadHandler = Utils.debounce(() => tryAddChessComButton(), CONFIG.RETRY_DELAY);
+      window.addEventListener("load", loadHandler);
+      
       window.addEventListener("hashchange", () => {
-        // Réinitialiser les boutons lors d'un changement de page
         ButtonManager.removeAllButtons();
-        setTimeout(tryAddChessComButton, CONFIG.RETRY_DELAY);
+        loadHandler();
       });
 
       // Vérification périodique
-      setInterval(() => {
-        if (
-          !STATE.buttonAdded ||
-          !document.querySelector(".wintchess-button")
-        ) {
-          tryAddChessComButton();
+      const periodicCheck = setInterval(() => {
+        if (document.visibilityState === "hidden") {
+          return;
+        }
+        
+        // Vérification préliminaire rapide avant d'essayer d'ajouter le bouton
+        if (!STATE.buttonAdded || !document.querySelector(".wintchess-button")) {
+          // Vérifier d'abord si la modale de fin de partie est présente
+          if (document.querySelector(".game-over-modal-content")) {
+            tryAddButtonToGameOverModal();
+          } else {
+            tryAddChessComButton();
+          }
         }
       }, CONFIG.BUTTON_CHECK_INTERVAL);
+      
+      window.addEventListener("beforeunload", () => {
+        clearInterval(periodicCheck);
+        DomObserverManager.disconnectExisting();
+      });
     }
   }
 
@@ -514,67 +611,96 @@
   }
 
   function setupChessComMutationObserver(callback) {
-    if (STATE.observer) {
-      STATE.observer.disconnect();
-    }
+    DomObserverManager.disconnectExisting();
 
-    STATE.observer = new MutationObserver((mutationsList) => {
+    const chesscomCallback = Utils.debounce((mutationsList) => {
       // Ne rien faire si le bouton existe déjà
-      if (STATE.buttonAdded && document.querySelector(".wintchess-button"))
+      if (STATE.buttonAdded && document.querySelector(".wintchess-button")) {
         return;
+      }
 
       // Réinitialiser l'état si le bouton a disparu
       if (STATE.buttonAdded && !document.querySelector(".wintchess-button")) {
         STATE.buttonAdded = false;
       }
 
-      // Vérifier la présence de la modale de fin de partie
-      for (const m of mutationsList) {
-        if (m.type === "childList" && m.addedNodes.length > 0) {
-          for (const node of m.addedNodes) {
-            if (node.nodeType === Node.ELEMENT_NODE && node.querySelector) {
-              if (
-                node.querySelector(".game-over-modal-content") ||
-                node.classList?.contains("game-over-modal-content")
-              ) {
-                setTimeout(() => tryAddButtonToGameOverModal(), 300);
-                return;
-              }
-            }
-          }
+      const gameOverModalDetected = mutationsList.some(mutation => {
+        if (mutation.type !== "childList" || !mutation.addedNodes.length) {
+          return false;
         }
-      }
-      callback();
-    });
+        
+        return Array.from(mutation.addedNodes).some(node => {
+          return node.nodeType === Node.ELEMENT_NODE && (
+            (node.querySelector && node.querySelector(".game-over-modal-content")) ||
+            (node.classList && node.classList.contains("game-over-modal-content"))
+          );
+        });
+      });
 
+      if (gameOverModalDetected) {
+        // Donner un court délai pour s'assurer que le DOM est complètement chargé
+        setTimeout(() => tryAddButtonToGameOverModal(), 300);
+        return;
+      }
+      
+      // Si pas de modale de fin de partie, essayer d'ajouter le bouton normalement
+      callback();
+    }, CONFIG.DEBOUNCE_DELAY);
+
+    STATE.observer = new MutationObserver(chesscomCallback);
+    
     STATE.observer.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "style", "id"],
+      attributes: false  // On n'a pas besoin d'observer les attributs pour cette fonction
     });
   }
 
-  async function getPgnFromChessCom() {
-    try {
-      const pgn = await getPgnFromSharePanel();
-      if (pgn) {
-        return pgn;
+  // Extraction pour Chess.com ajoutée au PgnExtractor
+  Object.assign(PgnExtractor, {
+    async fromChessCom() {
+      const pageInfo = getChessComPageInfo();
+      
+      // Vérifier le cache d'abord
+      const cacheKey = `chesscom_${pageInfo.gameId || window.location.pathname}`;
+      const cachedPgn = this._getFromCache(cacheKey);
+      if (cachedPgn) {
+        console.log("PGN récupéré depuis le cache");
+        return cachedPgn;
       }
-      throw new Error(
-        "Impossible de récupérer le PGN depuis la page Chess.com",
-      );
-    } catch (error) {
-      console.error("Erreur lors de l'extraction du PGN:", error);
-      throw error;
+      
+      try {
+        const pgn = await getPgnFromSharePanel();
+        if (pgn) {
+          this._setCacheWithExpiry(cacheKey, pgn);
+          return pgn;
+        }
+        throw new Error("Impossible de récupérer le PGN depuis la page Chess.com");
+      } catch (error) {
+        console.error("Erreur lors de l'extraction du PGN:", error);
+        throw error;
+      }
     }
+  });
+  
+  // Fonction pour compatibilité avec le code existant
+  async function getPgnFromChessCom() {
+    return PgnExtractor.fromChessCom();
   }
 
-  // Ouvre le panneau de partage et extrait le PGN
+  // Gestionnaire de boutons
   const ButtonManager = (() => {
-    const buttonCache = {};
-
+    const buttonCache = new Map();
+    const targetCache = new Map();
+    const getRetryDelay = (attempts) => {
+      return Math.min(
+        CONFIG.RETRY_DELAY * Math.pow(1.5, attempts),
+        CONFIG.LONG_RETRY_DELAY
+      );
+    };
+    
     return {
+      // Fonction d'ajout de bouton
       addButton({
         id = "default",
         buttonCreator,
@@ -583,132 +709,134 @@
         retryFn = null,
         checkExisting = true,
       }) {
-        // Fonction qui sera rappelée si besoin de réessayer
-        const actualRetryFn =
-          retryFn ||
-          ((newAttempts) => {
-            return this.addButton({
-              id,
-              buttonCreator,
-              targets,
-              attempts: newAttempts,
-              retryFn,
-            });
+        const actualRetryFn = retryFn || ((newAttempts) => {
+          return this.addButton({
+            id,
+            buttonCreator,
+            targets,
+            attempts: newAttempts,
+            retryFn,
+            checkExisting
           });
-
-        // Vérifier si le bouton existe déjà
-        if (
-          checkExisting &&
+        });
+        
+        // Vérification rapide de l'existence du bouton
+        const buttonExists = checkExisting &&
           STATE.buttonAdded &&
-          document.querySelector(".wintchess-button")
-        ) {
+          document.querySelector(".wintchess-button");
+          
+        if (buttonExists) {
           return true;
         }
-
-        // Réinitialiser l'état si le bouton a disparu
+        
         if (STATE.buttonAdded && !document.querySelector(".wintchess-button")) {
           STATE.buttonAdded = false;
-          delete buttonCache[id];
+          buttonCache.delete(id);
         }
-
-        // Attendre que la page soit bien chargée pour éviter d'insérer le bouton trop tôt
+        
+        // Attendre que le DOM soit prêt avant d'insérer
         if (document.readyState !== "complete" && attempts < 5) {
           setTimeout(() => actualRetryFn(attempts + 1), CONFIG.RETRY_DELAY);
           return false;
         }
-
-        // Créer ou récupérer le bouton du cache
-        let button;
-        if (buttonCache[id]) {
-          button = buttonCache[id];
-        } else {
+        
+        // Création ou récupération du bouton depuis le cache
+        let button = buttonCache.get(id);
+        if (!button) {
           button = buttonCreator();
-          buttonCache[id] = button;
+          buttonCache.set(id, button);
         }
-
-        let inserted = false;
-
-        // Trier les sélecteurs par priorité
-        const sortedTargets = [...targets].sort(
-          (a, b) => (b.priority || 0) - (a.priority || 0),
-        );
-
-        // Parcourir les sélecteurs par ordre de priorité
+        
+        // Insertion du bouton
+        if (this.insertButton(id, button, targets)) {
+          return true;
+        }
+        
+        // Stratégie de réessai
+        if (attempts < CONFIG.MAX_ATTEMPTS - 1) {
+          setTimeout(
+            () => actualRetryFn(attempts + 1),
+            getRetryDelay(attempts)
+          );
+        } else {
+          // Réinitialiser les tentatives après une pause plus longue
+          setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY);
+        }
+        
+        return false;
+      },
+      
+      insertButton(id, button, targets) {
+        // Trier les sélecteurs par priorité (une seule fois par type de cible)
+        let sortedTargets = targetCache.get(targets);
+        if (!sortedTargets) {
+          sortedTargets = [...targets].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+          targetCache.set(targets, sortedTargets);
+        }
+        
         for (const { selector, method } of sortedTargets) {
-          const elements =
-            selector instanceof Element
-              ? [selector]
-              : document.querySelectorAll(selector);
-
-          if (elements.length > 0) {
-            try {
-              const element = elements[0];
-              if (method === "append") {
-                element.appendChild(button);
-              } else if (method === "after") {
-                element.parentNode.insertBefore(button, element.nextSibling);
-              } else {
-                element.insertAdjacentElement(method, button);
-              }
-
-              STATE.buttonAdded = true;
-              STATE.buttonInstances[id] = { button, element, method };
-              inserted = true;
-              break;
-            } catch (error) {
-              console.error("Erreur lors de l'insertion du bouton:", error);
+          try {
+            const elements = selector instanceof Element ?
+              [selector] :
+              document.querySelectorAll(selector);
+            
+            if (!elements.length) continue;
+            
+            const element = elements[0];
+            
+            // Insérer le bouton selon la méthode appropriée
+            if (method === "append") {
+              element.appendChild(button);
+            } else if (method === "after" || method === "afterend") {
+              element.parentNode.insertBefore(button, element.nextSibling);
+            } else {
+              element.insertAdjacentElement(method, button);
             }
+            
+            // Mettre à jour l'état global
+            STATE.buttonAdded = true;
+            STATE.buttonInstances.set(id, { button, element, method });
+            
+            return true;
+          } catch (error) {
+            console.error("Erreur lors de l'insertion du bouton:", error);
           }
         }
-
-        // Réessayer avec un délai exponentiel si échec
-        if (!inserted) {
-          if (attempts < CONFIG.MAX_ATTEMPTS - 1) {
-            setTimeout(
-              () => actualRetryFn(attempts + 1),
-              Math.min(
-                CONFIG.RETRY_DELAY * Math.pow(1.5, attempts),
-                CONFIG.LONG_RETRY_DELAY,
-              ),
-            );
-          } else {
-            // Faire une pause plus longue avant de réessayer si on atteint le max d'essais
-            setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY);
-          }
-          return false;
-        }
-
-        return true;
+        
+        return false;
       },
 
-      // Récupérer les sélecteurs appropriés selon la plateforme
       getTargets(platform = STATE.platform) {
-        // Combiner les sélecteurs partagés avec ceux spécifiques à la plateforme
-        if (platform === "lichess") {
-          return [
-            ...CONFIG.BUTTON_SELECTORS.SHARED,
-            ...CONFIG.BUTTON_SELECTORS.LICHESS,
-          ];
-        } else if (platform === "chess.com") {
-          return [
-            ...CONFIG.BUTTON_SELECTORS.SHARED,
-            ...CONFIG.BUTTON_SELECTORS.CHESS_COM,
-          ];
+        const cacheKey = `targets_${platform}`;
+        if (targetCache.has(cacheKey)) {
+          return targetCache.get(cacheKey);
         }
-        // Si la plateforme n'est pas reconnue, retourner les sélecteurs partagés
-        return CONFIG.BUTTON_SELECTORS.SHARED;
+        
+        let result;
+        if (platform === "lichess") {
+          result = [...CONFIG.BUTTON_SELECTORS.SHARED, ...CONFIG.BUTTON_SELECTORS.LICHESS];
+        } else if (platform === "chess.com") {
+          result = [...CONFIG.BUTTON_SELECTORS.SHARED, ...CONFIG.BUTTON_SELECTORS.CHESS_COM];
+        } else {
+          result = CONFIG.BUTTON_SELECTORS.SHARED;
+        }
+        
+        targetCache.set(cacheKey, result);
+        return result;
       },
 
-      // Supprimer tous les boutons (utile lors des changements de page)
+      // Suppression des boutons
       removeAllButtons() {
-        Object.values(STATE.buttonInstances).forEach(({ button }) => {
+        STATE.buttonInstances.forEach(({ button }) => {
           if (button && button.parentNode) {
             button.parentNode.removeChild(button);
           }
         });
-        STATE.buttonInstances = {};
+        
+        STATE.buttonInstances.clear();
+        buttonCache.clear();
         STATE.buttonAdded = false;
-      },
+      }
     };
   })();
 
@@ -851,97 +979,167 @@
     pasteAndAnalyze();
   }
 
+  // Fonction de collage et analyse sur WintrChess
   async function pasteAndAnalyze() {
     const pgnToPaste = await chromeStorage.getValue(CONFIG.PGN_STORAGE_KEY, null);
-
-    if (pgnToPaste) {
-      // Sélecteurs pour WintrChess
-      const selectors = {
+    if (!pgnToPaste) return;
+    
+    const selectors = [
+      // Sélecteurs par classe spécifique (priorité la plus haute)
+      { 
         textarea: "textarea.TerVPsT9aZ0soO8yjZU4",
-        analyzeButton: "button.rHBNQrpvd7mwKp3HqjVQ.THArhyJIfuOy42flULV6",
-        // Sélecteurs alternatifs pour tenir compte des changements potentiels de classes
-        alternateTextarea: 'textarea[placeholder*="PGN"]',
-        alternateButton:
-          'button:not([disabled]):contains("Analyser"), button:not([disabled]):contains("Analyze")',
-      };
+        button: "button.rHBNQrpvd7mwKp3HqjVQ.THArhyJIfuOy42flULV6", 
+        priority: 3 
+      },
+      // Sélecteurs par attribut (priorité moyenne)
+      { 
+        textarea: 'textarea[placeholder*="PGN"]', 
+        button: '', // Sera trouvé par findButtonByText
+        priority: 2 
+      },
+      // Sélecteurs génériques (priorité basse)
+      { 
+        textarea: 'textarea', 
+        button: '', 
+        priority: 1 
+      }
+    ];
+    
+    // Utilisation d'un limit rate pour ne pas surcharger l'interface
+    const maxAttempts = 30;
+    const initialDelay = 300;
+    let attempts = 0;
+    let delayMs = initialDelay;
 
-      let attempts = 0;
-      const maxAttempts = 20;
-      const retryDelay = 500;
-
-      const intervalId = setInterval(async () => {
-        attempts++;
-
-        // Tenter les différents sélecteurs
-        const textarea =
-          document.querySelector(selectors.textarea) ||
-          document.querySelector(selectors.alternateTextarea);
-
-        const analyzeButton =
-          document.querySelector(selectors.analyzeButton) ||
-          findButtonByText(["Analyser", "Analyze"]);
-
-        if (textarea && analyzeButton) {
-          clearInterval(intervalId);
-
-          try {
-            // Mettre le focus sur le textarea
-            textarea.focus();
-            await sleep(CONFIG.AUTO_PASTE_DELAY);
-
-            // Définir directement la valeur
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-              window.HTMLTextAreaElement.prototype,
-              "value",
-            ).set;
-            nativeInputValueSetter.call(textarea, pgnToPaste);
-
-            // Déclencher l'événement input pour simuler une saisie utilisateur
-            textarea.dispatchEvent(new Event("input", { bubbles: true }));
-            await sleep(CONFIG.AUTO_PASTE_DELAY * 2);
-
-            // Retirer le focus
-            textarea.blur();
-            await sleep(CONFIG.AUTO_PASTE_DELAY);
-
-            // Cliquer sur le bouton d'analyse
-            analyzeButton.click();
-
-            // Supprimer les données PGN du stockage après utilisation
-            await chromeStorage.deleteValue(CONFIG.PGN_STORAGE_KEY);
-          } catch (error) {
-            console.error("Erreur lors du collage automatique:", error);
-          }
-        } else if (attempts >= maxAttempts) {
-          clearInterval(intervalId);
-          console.log(
-            "Impossible de trouver les éléments nécessaires sur WintrChess après plusieurs tentatives.",
-          );
+    const findElements = () => {
+      for (const sel of selectors) {
+        const textarea = document.querySelector(sel.textarea);
+        
+        if (!textarea) continue;
+        
+        // Si un textarea est trouvé, chercher le bouton
+        const button = sel.button ? 
+          document.querySelector(sel.button) : 
+          findButtonByText(["Analyser", "Analyze", "Analyze game"]);
+        
+        if (button) {
+          return { textarea, button };
         }
-      }, retryDelay);
-    }
+      }
+      
+      return null;
+    };
+    
+    // Fonction de collage du PGN
+    const pastePgn = async (textarea, button) => {
+      try {
+        // 1. Focus et sélection du contenu existant
+        textarea.focus();
+        textarea.select();
+        await Utils.sleep(100);
+        
+        // 2. Injection optimisée du PGN en utilisant le setter natif
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          "value"
+        ).set;
+        
+        nativeInputValueSetter.call(textarea, pgnToPaste);
+        
+        // 3. Déclencher les événements nécessaires pour activer le bouton
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        textarea.dispatchEvent(new Event("change", { bubbles: true }));
+        await Utils.sleep(300);
+        
+        // 4. Cliquer sur le bouton d'analyse
+        if (!button.disabled) {
+          button.click();
+          
+          // 5. Nettoyer le stockage après succès
+          await chromeStorage.deleteValue(CONFIG.PGN_STORAGE_KEY);
+          return true;
+        }
+        
+        return false;
+      } catch (error) {
+        console.error("Erreur lors du collage automatique:", error);
+        return false;
+      }
+    };
+    
+    // Fonction récursive avec backoff exponentiel
+    const attemptPaste = async () => {
+      // 1. Observer si la page est visible
+      if (document.visibilityState === "hidden") {
+        // Reporter jusqu'à ce que la page soit visible
+        document.addEventListener("visibilitychange", function checkVisibility() {
+          if (document.visibilityState === "visible") {
+            document.removeEventListener("visibilitychange", checkVisibility);
+            setTimeout(attemptPaste, 500);
+          }
+        });
+        return;
+      }
+      
+      // 2. Tentative de trouver les éléments nécessaires
+      const elements = findElements();
+      
+      if (elements) {
+        // Éléments trouvés, tenter le collage
+        const success = await pastePgn(elements.textarea, elements.button);
+        
+        if (success) {
+          // Collage réussi, rien d'autre à faire
+          return;
+        }
+      }
+      
+      // 3. Échec ou éléments non trouvés, réessayer?
+      attempts++;
+      
+      if (attempts >= maxAttempts) {
+        console.warn(`Impossible de coller le PGN après ${maxAttempts} tentatives.`);
+        NotificationManager.show("Impossible de coller automatiquement le PGN. Veuillez copier-coller manuellement.");
+        return;
+      }
+      
+      // Backoff exponentiel pour éviter de surcharger
+      delayMs = Math.min(delayMs * 1.5, CONFIG.LONG_RETRY_DELAY);
+      setTimeout(attemptPaste, delayMs);
+    };
+    
+    // Démarrer le processus après un court délai pour laisser la page se charger
+    setTimeout(attemptPaste, 500);
   }
 
-  // ===== HELPER FUNCTIONS =====
-
+  // Fonction pour trouver un bouton par son texte
   function findButtonByText(textOptions) {
-    // Fonction pour trouver un bouton par son texte
+    const allButtons = Array.from(document.querySelectorAll("button:not([disabled])"));
+    
     for (const text of textOptions) {
-      const elements = Array.from(
-        document.querySelectorAll("button:not([disabled])")
-      );
-      for (const el of elements) {
-        if (el.textContent.includes(text)) {
-          return el;
+      const textLower = text.toLowerCase();
+      for (const button of allButtons) {
+        if (button.textContent.toLowerCase().includes(textLower)) {
+          return button;
         }
       }
     }
     return null;
   }
 
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+  const Utils = {
+    sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    },
+    
+    debounce(fn, delay) {
+      let timer = null;
+      return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
+  };
 
   // ===== BOOTSTRAP =====
   init();
