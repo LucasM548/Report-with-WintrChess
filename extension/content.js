@@ -771,14 +771,14 @@
                 closeSharePanel();
                 resolve(null);
               }
-            }, 1000);
+            }, 150);
           } else {
             closeSharePanel();
             resolve(null);
           }
-        }, 500);
+        }, 100);
       } catch (error) {
-        setTimeout(() => closeSharePanel(), 500);
+        closeSharePanel();
         resolve(null);
       }
     });

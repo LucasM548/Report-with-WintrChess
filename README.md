@@ -19,25 +19,6 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 
 ## 🚀 Installation
 
-### Option 1: Tampermonkey Script
-
-1. **Prerequisites**: Install the [Tampermonkey](https://www.tampermonkey.net/) extension for your browser
-   - [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-   - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
-   - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-   - [Safari](https://apps.apple.com/app/tampermonkey/id1482490089)
-
-2. **Script Installation**:
-   - Click [here](https://github.com/LucasM548/Report-with-Wintrches/raw/main/Report-with-Wintrches.js) to install the script directly
-   - OR
-   - Open Tampermonkey in your browser
-   - Click on the "Add Script" tab
-   - Copy the content of the `Report-with-Wintrches.js` file
-   - Paste it into the Tampermonkey editor
-   - Save the script (Ctrl+S or File > Save)
-
-### Option 2: Chrome Extension
-
 1. **Developer Mode Installation**:
    - Download or clone this repository to your computer
    - Open Chrome and navigate to `chrome://extensions/`
@@ -68,14 +49,9 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 
 ## 📱 Version Information
 
-### Tampermonkey Script
-- Simple installation for all major browsers
-- Requires Tampermonkey extension
-- Updated frequently with new features
-
 ### Chrome Extension
-- Native Chrome integration (no Tampermonkey required)
-- Same features as the Tampermonkey script
+- Native Chrome integration
+- Updated frequently with new features
 - Available in developer mode only for now
 
 ## 💡 Acknowledgements
