@@ -551,8 +551,6 @@
           }
         }
       }
-
-      // Pour tout autre changement, essayer d'ajouter le bouton normal
       callback();
     });
 
