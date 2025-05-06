@@ -721,16 +721,6 @@
     };
   })();
 
-  // La fonction originale maintenue pour compatibilité
-  function tryAddGenericButton({ buttonCreator, targets, attempts, retryFn }) {
-    return ButtonManager.addButton({
-      buttonCreator,
-      targets,
-      attempts,
-      retryFn,
-    });
-  }
-
   async function getPgnFromSharePanel() {
     return new Promise((resolve) => {
       try {
@@ -917,51 +907,10 @@
       }
     }
 
-    // Si on ne trouve pas le bouton, essayer d'en trouver un similaire par la classe
     const similarButtons = document.querySelectorAll(
       "button.cc-button-component.cc-button-xx-large:not(.wintchess-button)",
     );
     return similarButtons.length > 0 ? similarButtons[0] : null;
-  }
-
-  // Fonction conservée pour référence mais non utilisée dans le nouveau système
-  function insertAfterBilanButton(bilanButton, wintrButton) {
-    // Utiliser maintenant le gestionnaire de boutons centralisé
-    return ButtonManager.addButton({
-      id: "chesscom_after_bilan",
-      buttonCreator: () => {
-        // Créer une div wrapper pour positionner notre bouton exactement sous le bilan
-        const wrapper = document.createElement("div");
-        wrapper.className = "wintchess-button-wrapper";
-        wrapper.style.cssText = `
-                width: 100%;
-                display: block;
-                margin-top: 8px;
-            `;
-
-        // Créer et adapter le style du bouton pour qu'il ressemble au bouton Bilan
-        const button = createChessComButton();
-        if (bilanButton.classList.contains("cc-button-component")) {
-          button.className = bilanButton.className;
-          button.classList.add("wintchess-button"); // S'assurer qu'on garde notre classe
-        }
-
-        wrapper.appendChild(button);
-        return wrapper;
-      },
-      targets: [
-        {
-          selector: bilanButton.parentNode.classList.contains(
-            "post-game-button",
-          )
-            ? bilanButton.parentNode
-            : bilanButton,
-          method: "afterend",
-          priority: 20,
-        },
-      ],
-      checkExisting: false,
-    });
   }
 
   // ===== WINTRCHESS FUNCTIONS =====
