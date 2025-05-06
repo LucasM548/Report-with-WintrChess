@@ -1,8 +1,8 @@
 # ♟️Chess Sites to WintrChess PGN Transfer
 
-This Tampermonkey script allows you to easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrChess](https://wintrchess.com/)** for in-depth analysis.
+Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrChess](https://wintrchess.com/)** for in-depth analysis. Available as both a Tampermonkey script and a Chrome extension.
 
-**[Video Presantation of WintrChess](https://youtu.be/rT5isX7mQds?si=6taY4ExPdrVeVkfr)**
+**[Video Presentation of WintrChess](https://youtu.be/rT5isX7mQds?si=6taY4ExPdrVeVkfr)**
 
 ## ✨ Features
 
@@ -18,6 +18,8 @@ This Tampermonkey script allows you to easily transfer your chess games from **L
 
 ## 🚀 Installation
 
+### Option 1: Tampermonkey Script
+
 1. **Prerequisites**: Install the [Tampermonkey](https://www.tampermonkey.net/) extension for your browser
    - [Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
    - [Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
@@ -32,6 +34,16 @@ This Tampermonkey script allows you to easily transfer your chess games from **L
    - Copy the content of the `Report-with-Wintrches.js` file
    - Paste it into the Tampermonkey editor
    - Save the script (Ctrl+S or File > Save)
+
+### Option 2: Chrome Extension
+
+1. **Developer Mode Installation**:
+   - Download or clone this repository to your computer
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" in the top right corner
+   - Click "Load unpacked extension"
+   - Select the `extension` folder containing the `manifest.json` file
+   - The extension is now installed and active!
 
 ## 🎮 Usage
 
@@ -52,6 +64,18 @@ This Tampermonkey script allows you to easily transfer your chess games from **L
   - Computer games (`chess.com/game/computer`)
   - Analysis pages (`chess.com/analysis`)
   - Play interface (`chess.com/play`)
+
+## 📱 Version Information
+
+### Tampermonkey Script
+- Simple installation for all major browsers
+- Requires Tampermonkey extension
+- Updated frequently with new features
+
+### Chrome Extension
+- Native Chrome integration (no Tampermonkey required)
+- Same features as the Tampermonkey script
+- Available in developer mode only for now
 
 ## 💡 Acknowledgements
 
