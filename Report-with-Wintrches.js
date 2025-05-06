@@ -16,8 +16,6 @@
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
 // @connect      lichess.org
-// @connect      chess.com
-// @connect      api.chess.com
 // @run-at       document-idle
 // ==/UserScript==
 
