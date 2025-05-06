@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chess Sites to WintrChess PGN Transfer",
   "version": "1.0",
-  "description": "Ajoute un bouton sur Lichess et Chess.com pour récupérer le PGN et l'envoyer à WintrChess pour analyse.",
+  "description": "Free analysis of your games on Lichess/Chess.com with WintrChess.",
   "permissions": [
     "storage",
     "tabs"
