@@ -771,12 +771,12 @@
                 closeSharePanel();
                 resolve(null);
               }
-            }, 150);
+            }, 500);
           } else {
             closeSharePanel();
             resolve(null);
           }
-        }, 100);
+        }, 500);
       } catch (error) {
         closeSharePanel();
         resolve(null);
