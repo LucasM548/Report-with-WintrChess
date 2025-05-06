@@ -420,52 +420,50 @@
     if (!gameOverModal) return false;
 
     // Si on a déjà ajouté notre bouton dans cette modale, ne rien faire
-    if (gameOverModal.querySelector(".wintchess-button")) return true;
+    if (gameOverModal.querySelector(".wintchess-button-container")) return true;
 
     // Chercher l'endroit idéal pour insérer notre bouton (juste après le bouton "Bilan de la partie")
-    const reviewButtonContainer = gameOverModal.querySelector(
-      ".game-over-review-button-component",
-    );
     const gameOverButtons = gameOverModal.querySelector(
-      ".game-over-modal-buttons",
+      ".game-over-modal-buttons"
     );
-
-    if (reviewButtonContainer) {
-      // Créer une copie du conteneur du bouton bilan pour notre bouton
-      const wintrButtonContainer = document.createElement("div");
-      wintrButtonContainer.className =
-        "game-over-review-button-component wintchess-button-container";
-      wintrButtonContainer.style.cssText = `
-                margin-bottom: 10px;
-                padding-bottom: 10px;
-            `;
-
-      // Nous n'ajoutons plus de label séparé pour éviter la duplication de texte
-      // Le texte est déjà dans le bouton lui-même
-
-      const wintrButton = createGameOverWintrButton();
-      wintrButton.classList.add("game-over-review-button-background");
-      wintrButtonContainer.appendChild(wintrButton);
-
-      if (gameOverButtons) {
-        // Insérer juste après le premier bouton et avant les boutons secondaires
-        gameOverButtons.insertBefore(
-          wintrButtonContainer,
-          reviewButtonContainer.nextSibling,
-        );
-      } else {
-        // Fallback: insérer après le bouton bilan s'il n'y a pas de conteneur de boutons
-        reviewButtonContainer.parentNode.insertBefore(
-          wintrButtonContainer,
-          reviewButtonContainer.nextSibling,
-        );
-      }
-
-      STATE.buttonAdded = true;
-      return true;
+    
+    if (!gameOverButtons) {
+      console.log("WintrChess: .game-over-modal-buttons non trouvé");
+      return false;
+    }
+    
+    const reviewButtonContainer = gameOverButtons.querySelector(
+      ".game-over-review-button-component"
+    );
+    
+    if (!reviewButtonContainer) {
+      console.log("WintrChess: .game-over-review-button-component non trouvé");
+      return false;
     }
 
-    return false;
+    // Créer une copie du conteneur du bouton bilan pour notre bouton
+    const wintrButtonContainer = document.createElement("div");
+    wintrButtonContainer.className =
+      "game-over-review-button-component wintchess-button-container";
+    wintrButtonContainer.style.cssText = `
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+    `;
+
+    const wintrButton = createGameOverWintrButton();
+    wintrButton.classList.add("game-over-review-button-background");
+    wintrButton.classList.add("wintchess-button");
+    wintrButtonContainer.appendChild(wintrButton);
+
+    // Insérer notre bouton juste après le bouton "Bilan de la partie"
+    gameOverButtons.insertBefore(
+      wintrButtonContainer,
+      reviewButtonContainer.nextSibling
+    );
+
+    console.log("WintrChess: Bouton ajouté à la modale de fin de partie");
+    STATE.buttonAdded = true;
+    return true;
   }
 
   // Gestionnaire de notifications optimisé
@@ -563,13 +561,16 @@
         }
         
         // Vérification préliminaire rapide avant d'essayer d'ajouter le bouton
-        if (!STATE.buttonAdded || !document.querySelector(".wintchess-button")) {
-          // Vérifier d'abord si la modale de fin de partie est présente
-          if (document.querySelector(".game-over-modal-content")) {
-            tryAddButtonToGameOverModal();
-          } else {
-            tryAddChessComButton();
-          }
+        const gameOverModal = document.querySelector(".game-over-modal-content");
+        const hasButton = document.querySelector(".wintchess-button-container");
+        
+        // Si la modale de fin de partie est présente et que notre bouton n'y est pas
+        if (gameOverModal && !hasButton) {
+          console.log("WintrChess: Modale de fin de partie détectée, ajout du bouton...");
+          tryAddButtonToGameOverModal();
+        } else if (!STATE.buttonAdded || !document.querySelector(".wintchess-button")) {
+          // Sinon, essayer d'ajouter le bouton normal
+          tryAddChessComButton();
         }
       }, CONFIG.BUTTON_CHECK_INTERVAL);
       
@@ -912,6 +913,64 @@
         resolve(null);
       }
     });
+  }
+
+  function setupChessComMutationObserver(callback) {
+    const observerConfig = {
+      childList: true,
+      subtree: true,
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      let shouldCallback = false;
+      let gameOverModalDetected = false;
+
+      for (const mutation of mutations) {
+        if (mutation.addedNodes.length) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const elem = node;
+
+              if (elem.classList && elem.classList.contains("game-over-modal-content")) {
+                gameOverModalDetected = true;
+                setTimeout(() => {
+                  console.log("WintrChess: Modale de fin de partie détectée par l'observateur");
+                  tryAddButtonToGameOverModal();
+                }, 300);
+              }
+
+              // Détection des éléments pertinents qui déclenchent un callback
+              if (
+                elem.classList &&
+                (elem.classList.contains("board-layout-main") ||
+                  elem.classList.contains("game-review-summary-button") ||
+                  elem.classList.contains("board-controls-icon-menu-button") ||
+                  elem.classList.contains("side-panel-component") ||
+                  elem.classList.contains("clock-component") ||
+                  elem.classList.contains("highlight-menu") ||
+                  elem.nodeName.toLowerCase() === "chess-board" ||
+                  elem.classList.contains("ui_v5-button-component") ||
+                  elem.classList.contains("board-layout-bottom") ||
+                  elem.classList.contains("game-over-modal") ||
+                  elem.classList.contains("game-over-modal-buttons") ||
+                  elem.classList.contains("board-layout-sidebar"))
+              ) {
+                shouldCallback = true;
+              }
+            }
+          }
+        }
+      }
+
+      if (shouldCallback && !gameOverModalDetected) {
+        callback();
+      }
+    });
+
+    // Commencer à observer le document entier
+    observer.observe(document.documentElement, observerConfig);
+
+    return observer;
   }
 
   function tryAddChessComButton(attempts = 0) {
