@@ -399,13 +399,16 @@
         "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
       style: `
         width: 100%;
-        margin-top: 10px;
+        margin-top: 5px;
+        min-height: 48px;
+        white-space: normal;
+        padding: 8px 16px;
       `,
       innerHTML: `
-        <span class="cc-icon-glyph cc-icon-large cc-button-icon">
+        <span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">
           ${CHESS_ICON_SVG}
         </span>
-        <span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>
+        <span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${CONFIG.BUTTON_TEXT}</span>
       `,
       onClick: getPgnFromChessCom,
     });
@@ -433,13 +436,12 @@
       wintrButtonContainer.className =
         "game-over-review-button-component wintchess-button-container";
       wintrButtonContainer.style.cssText = `
-                margin-top: 10px;
+                margin-bottom: 10px;
+                padding-bottom: 10px;
             `;
 
-      const label = document.createElement("span");
-      label.className = "game-over-review-button-label";
-      label.textContent = CONFIG.BUTTON_TEXT;
-      wintrButtonContainer.appendChild(label);
+      // Nous n'ajoutons plus de label séparé pour éviter la duplication de texte
+      // Le texte est déjà dans le bouton lui-même
 
       const wintrButton = createGameOverWintrButton();
       wintrButton.classList.add("game-over-review-button-background");
