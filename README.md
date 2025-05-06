@@ -1,4 +1,4 @@
-# Chess Sites to WintrChess PGN Transfer
+# ♟️Chess Sites to WintrChess PGN Transfer
 
 This Tampermonkey script allows you to easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrChess](https://wintrchess.com/)** for in-depth analysis.
 
