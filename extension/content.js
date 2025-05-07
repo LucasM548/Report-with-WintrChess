@@ -477,11 +477,7 @@
   function tryAddButtonToGameOverModal() {
     const gameOverModal = document.querySelector(".game-over-modal-content");
     if (!gameOverModal) return false;
-
-    // Si on a déjà ajouté notre bouton dans cette modale, ne rien faire
     if (gameOverModal.querySelector(".wintchess-button-container")) return true;
-
-    // Chercher l'endroit idéal pour insérer notre bouton (juste après le bouton "Bilan de la partie")
     const gameOverButtons = gameOverModal.querySelector(
       ".game-over-modal-buttons"
     );
@@ -649,6 +645,7 @@
     const path = window.location.pathname;
     let gameId = null;
     let isRelevantPage = false;
+    let isReviewPage = false;
 
     // Partie live (format: /game/live/123456789)
     if (/^\/game\/live\/\d+/.test(path)) {
@@ -674,7 +671,24 @@
       isRelevantPage = true;
     }
 
-    return { isRelevantPage, gameId };
+    // Détection des pages de bilan
+    if (
+      /^\/analysis\/game\/live|daily|computer/.test(path) ||
+      /^\/game-report/.test(path) ||
+      /^\/analysis\/game-report/.test(path)
+    ) {
+      isReviewPage = true;
+    }
+
+    // Vérification supplémentaire basée sur les éléments de la page
+    if (
+      !isReviewPage &&
+      document.querySelector(".game-report-section, .game-review-container")
+    ) {
+      isReviewPage = true;
+    }
+
+    return { isRelevantPage, gameId, isReviewPage };
   }
 
   function setupChessComMutationObserver(callback) {
@@ -1273,6 +1287,12 @@
 
   function tryAddChessComButton(attempts = 0) {
     STATE.platform = "chess.com";
+
+    // Vérifier si nous sommes sur une page de bilan (dans ce cas, ne pas ajouter le bouton)
+    const pageInfo = getChessComPageInfo();
+    if (pageInfo.isReviewPage) {
+      return false;
+    }
 
     // Vérifier si nous sommes dans la modale de fin de partie (priorité la plus haute)
     if (tryAddButtonToGameOverModal()) {
