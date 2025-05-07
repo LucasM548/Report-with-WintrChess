@@ -11,12 +11,13 @@
     WINTRCHESS_URL: "https://wintrchess.com/",
     PGN_STORAGE_KEY: "wintrChessPgnToPaste",
     BUTTON_TEXT: "Analyser sur WintrChess",
-    MAX_ATTEMPTS: 30,
-    RETRY_DELAY: 500,
-    LONG_RETRY_DELAY: 2000,
-    AUTO_PASTE_DELAY: 100,
+    MAX_ATTEMPTS: 50,
+    RETRY_DELAY: 1000,
+    LONG_RETRY_DELAY: 3000,
+    AUTO_PASTE_DELAY: 500,
     BUTTON_CHECK_INTERVAL: 5000,
-    DEBOUNCE_DELAY: 200,
+    DEBOUNCE_DELAY: 500,
+    SLOW_DEVICE_THRESHOLD: 50,    // Seuil pour détecter un appareil lent (ms)
     BUTTON_SELECTORS: {
       // Termes pour trouver les boutons d'analyse/bilan
       REVIEW_TERMS: ["bilan", "review", "analysis", "analyser", "analyze"],
@@ -57,7 +58,35 @@
     platform: null, // 'lichess' ou 'chess.com'
     buttonInstances: new Map(), // Map pour garder une trace des boutons par type et emplacement
     platformDetected: false,  // Indique si la plateforme a été détectée et traitée
+    isSlowDevice: false,      // Indique si l'appareil est lent
+    performanceFactor: 1      // Facteur de performance pour ajuster les délais
   };
+  
+  // Détection des performances de l'appareil
+  function detectDevicePerformance() {
+    const startTime = performance.now();
+    let counter = 0;
+    
+    // Test de performance simple
+    for (let i = 0; i < 1000000; i++) {
+      counter++;
+    }
+    
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    
+    // Si le test prend plus de X ms, considérer l'appareil comme lent
+    if (duration > CONFIG.SLOW_DEVICE_THRESHOLD) {
+      STATE.isSlowDevice = true;
+      // Calculer un facteur de performance entre 1.5 et 5 en fonction de la lenteur
+      STATE.performanceFactor = Math.min(5, Math.max(1.5, duration / 20));
+      console.log(`[WintrChess] Appareil lent détecté. Facteur de performance: ${STATE.performanceFactor.toFixed(2)}`);
+    } else {
+      console.log(`[WintrChess] Appareil rapide détecté. Temps: ${duration.toFixed(2)}ms`);
+    }
+    
+    return duration;
+  }
 
   // Remplacements pour les fonctions TamperMonkey
   const chromeStorage = {
@@ -80,10 +109,10 @@
     }
   };
 
-  // On utilise maintenant Utils.debounce
-
-  // Détermine si nous sommes sur une page Lichess, Chess.com ou WintrChess et agit en conséquence
   function init() {
+    // Détection des performances avant tout
+    detectDevicePerformance();
+    
     if (window.location.hostname === "lichess.org") {
       initLichess();
     } else if (window.location.hostname === "www.chess.com") {
@@ -368,7 +397,7 @@
       padding: 5px 10px;
     `,
       innerHTML: `<span class="button-text">${CONFIG.BUTTON_TEXT}</span>`,
-      onClick: () => PgnExtractor.fromLichess(),
+      onClick: () => { return PgnExtractor.fromLichess(); },
     });
   }
 
@@ -388,7 +417,7 @@
       </span>
       <span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>
     `,
-      onClick: getPgnFromChessCom,
+      onClick: () => { return PgnExtractor.fromChessCom(); },
     });
   }
 
@@ -410,7 +439,7 @@
         </span>
         <span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${CONFIG.BUTTON_TEXT}</span>
       `,
-      onClick: getPgnFromChessCom,
+      onClick: () => { return PgnExtractor.fromChessCom(); },
     });
   }
 
@@ -461,7 +490,6 @@
       reviewButtonContainer.nextSibling
     );
 
-    console.log("WintrChess: Bouton ajouté à la modale de fin de partie");
     STATE.buttonAdded = true;
     return true;
   }
@@ -566,10 +594,8 @@
         
         // Si la modale de fin de partie est présente et que notre bouton n'y est pas
         if (gameOverModal && !hasButton) {
-          console.log("WintrChess: Modale de fin de partie détectée, ajout du bouton...");
           tryAddButtonToGameOverModal();
         } else if (!STATE.buttonAdded || !document.querySelector(".wintchess-button")) {
-          // Sinon, essayer d'ajouter le bouton normal
           tryAddChessComButton();
         }
       }, CONFIG.BUTTON_CHECK_INTERVAL);
@@ -668,28 +694,60 @@
       const cacheKey = `chesscom_${pageInfo.gameId || window.location.pathname}`;
       const cachedPgn = this._getFromCache(cacheKey);
       if (cachedPgn) {
-        console.log("PGN récupéré depuis le cache");
+        console.log("[WintrChess] PGN récupéré depuis le cache");
         return cachedPgn;
       }
       
+      if (STATE.isSlowDevice) {
+        NotificationManager.show("Extraction du PGN en cours sur un appareil lent. Veuillez patienter...", 8000);
+      } else {
+        NotificationManager.show("Extraction du PGN en cours...", 3000);
+      }
+      
       try {
-        const pgn = await getPgnFromSharePanel();
+        // Si c'est un appareil lent, donner plus de temps à la page pour se stabiliser avant l'extraction
+        if (STATE.isSlowDevice) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * STATE.performanceFactor));
+        }
+        
+        // Plusieurs tentatives d'extraction avec un temps d'attente croissant
+        let pgn = null;
+        let attempts = 0;
+        const maxAttempts = STATE.isSlowDevice ? 3 : 2;
+        
+        while (!pgn && attempts < maxAttempts) {
+          try {
+            console.log(`[WintrChess] Tentative d'extraction PGN ${attempts + 1}/${maxAttempts}`);
+            pgn = await getPgnFromSharePanel();
+            
+            if (!pgn && attempts < maxAttempts - 1) {
+              // Attendre avant la prochaine tentative (temps d'attente croissant)
+              const waitTime = (1000 * (attempts + 1)) * (STATE.isSlowDevice ? STATE.performanceFactor : 1);
+              console.log(`[WintrChess] Nouvelle tentative dans ${waitTime}ms`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+            attempts++;
+          } catch (err) {
+            console.error(`[WintrChess] Erreur tentative ${attempts + 1}:`, err);
+            attempts++;
+            if (attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        }
+        
         if (pgn) {
           this._setCacheWithExpiry(cacheKey, pgn);
           return pgn;
         }
         throw new Error("Impossible de récupérer le PGN depuis la page Chess.com");
       } catch (error) {
-        console.error("Erreur lors de l'extraction du PGN:", error);
+        console.error("[WintrChess] Erreur lors de l'extraction du PGN:", error);
+        NotificationManager.show("Erreur lors de l'extraction du PGN. Veuillez réessayer.", 5000);
         throw error;
       }
     }
   });
-  
-  // Fonction pour compatibilité avec le code existant
-  async function getPgnFromChessCom() {
-    return PgnExtractor.fromChessCom();
-  }
 
   // Gestionnaire de boutons
   const ButtonManager = (() => {
@@ -844,12 +902,57 @@
   })();
 
   async function getPgnFromSharePanel() {
-    return new Promise((resolve) => {
-      try {
-        // 1. Ouvrir le panneau de partage
+    return new Promise((resolve, reject) => {
+      // Calculer les délais en fonction des performances de l'appareil
+      const getDelay = (baseDelay) => {
+        // Délai de base multiplié par le facteur de performance (min 1.5x sur PC lent)
+        return STATE.isSlowDevice
+          ? baseDelay * Math.max(1.5, STATE.performanceFactor)
+          : baseDelay;
+      };
+
+      // Fonction pour fermer le panneau de partage
+      const closeSharePanel = () => {
+        try {
+          const closeButton =
+            document.querySelector(
+              'button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]',
+            ) ||
+            document.querySelector(
+              '.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]',
+            );
+
+          if (closeButton) closeButton.click();
+        } catch (e) {
+          console.error("[WintrChess] Erreur lors de la fermeture du panneau:", e);
+        }
+      };
+
+      // Fonction récursive pour tenter d'ouvrir le panneau de partage
+      const tryOpenSharePanel = (attempts = 0) => {
+        const maxAttempts = 5;
+        if (attempts >= maxAttempts) {
+          console.error(`[WintrChess] Échec de l'ouverture du panneau de partage après ${maxAttempts} tentatives`);
+          return reject("Échec de l'ouverture du panneau de partage");
+        }
+
+        console.log(`[WintrChess] Tentative ${attempts+1}/${maxAttempts} d'ouverture du panneau de partage`);
+        
+        // Chercher tous les boutons de partage possibles
         const shareButtons = document.querySelectorAll(
           'button[aria-label="Share"], .icon-font-chess.share, [data-cy="share-button"]',
         );
+
+        // Si PC lent, ajouter des sélecteurs plus génériques pour trouver le bouton de partage
+        if (STATE.isSlowDevice) {
+          const allButtons = Array.from(document.querySelectorAll('button'));
+          const shareTextButtons = allButtons.filter(btn => {
+            const text = btn.textContent?.toLowerCase() || "";
+            return text.includes("share") || text.includes("partage");
+          });
+          
+          shareButtons.push(...shareTextButtons);
+        }
 
         let shareClicked = false;
         for (const btn of shareButtons) {
@@ -861,57 +964,126 @@
         }
 
         if (!shareClicked) {
-          return resolve(null);
+          console.log(`[WintrChess] Bouton de partage non trouvé, nouvelle tentative dans ${getDelay(500)}ms`);
+          setTimeout(() => tryOpenSharePanel(attempts + 1), getDelay(500));
+          return;
         }
 
-        // Fonction pour fermer le panneau de partage
-        const closeSharePanel = () => {
-          try {
-            const closeButton =
-              document.querySelector(
-                'button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]',
-              ) ||
-              document.querySelector(
-                '.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]',
-              );
+        // Attendre que le panneau apparaisse puis passer à l'étape suivante
+        setTimeout(() => tryClickPgnTab(), getDelay(800));
+      };
 
-            if (closeButton) closeButton.click();
-          } catch (e) {}
-        };
+      // Fonction récursive pour cliquer sur l'onglet PGN
+      const tryClickPgnTab = (attempts = 0) => {
+        const maxAttempts = 5;
+        if (attempts >= maxAttempts) {
+          closeSharePanel();
+          console.error(`[WintrChess] Onglet PGN non trouvé après ${maxAttempts} tentatives`);
+          return reject("Onglet PGN non trouvé");
+        }
 
-        // 2. Attendre que le panneau apparaisse puis cliquer sur l'onglet PGN
-        setTimeout(() => {
-          const pgnButton = document.querySelector(
-            'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
-          );
-
-          if (pgnButton) {
-            pgnButton.click();
-
-            // 3. Attendre que le contenu PGN apparaisse et l'extraire
-            setTimeout(() => {
-              try {
-                const textarea = document.querySelector(
-                  'textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]',
-                );
-
-                const pgn = textarea?.value || null;
-                closeSharePanel();
-                resolve(pgn);
-              } catch (error) {
-                closeSharePanel();
-                resolve(null);
-              }
-            }, 500);
-          } else {
-            closeSharePanel();
-            resolve(null);
+        console.log(`[WintrChess] Tentative ${attempts+1}/${maxAttempts} de cliquer sur l'onglet PGN`);
+        
+        // Recherche plus large de l'onglet PGN
+        const pgnSelectors = [
+          'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
+          'button.cc-tab-item-component[aria-controls="tabpanel-pgn"]',
+          'button.cc-tab-item-component:not([aria-selected="true"])',
+          'button[id*="pgn"]',
+          'button[aria-controls*="pgn"]'
+        ];
+        
+        // Essayer tous les sélecteurs jusqu'à trouver un élément
+        let pgnButton = null;
+        for (const selector of pgnSelectors) {
+          const el = document.querySelector(selector);
+          if (el) {
+            pgnButton = el;
+            break;
           }
-        }, 500);
-      } catch (error) {
-        closeSharePanel();
-        resolve(null);
+        }
+        
+        // Si aucun sélecteur ne fonctionne, chercher des boutons avec le texte "PGN"
+        if (!pgnButton) {
+          const allButtons = Array.from(document.querySelectorAll('button'));
+          pgnButton = allButtons.find(btn => {
+            return btn.textContent?.includes("PGN");
+          });
+        }
+
+        if (!pgnButton) {
+          console.log(`[WintrChess] Onglet PGN non trouvé, nouvelle tentative dans ${getDelay(500)}ms`);
+          setTimeout(() => tryClickPgnTab(attempts + 1), getDelay(500));
+          return;
+        }
+
+        try {
+          pgnButton.click();
+          // Attendre que le contenu PGN apparaisse
+          setTimeout(() => tryExtractPgn(), getDelay(1000));
+        } catch (e) {
+          console.error("[WintrChess] Erreur lors du clic sur l'onglet PGN:", e);
+          setTimeout(() => tryClickPgnTab(attempts + 1), getDelay(500));
+        }
+      };
+
+      // Fonction récursive pour extraire le PGN
+      const tryExtractPgn = (attempts = 0) => {
+        const maxAttempts = 5;
+        if (attempts >= maxAttempts) {
+          closeSharePanel();
+          console.error(`[WintrChess] Échec de l'extraction du PGN après ${maxAttempts} tentatives`);
+          return reject("Échec de l'extraction du PGN");
+        }
+
+        console.log(`[WintrChess] Tentative ${attempts+1}/${maxAttempts} d'extraction du PGN`);
+        
+        // Recherche élargie pour le textarea
+        const textareaSelectors = [
+          'textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]',
+          'textarea[aria-label="PGN"]',
+          'textarea.share-menu-tab-pgn-textarea',
+          'textarea.cc-textarea-component',
+          'textarea'
+        ];
+        
+        // Essayer tous les sélecteurs jusqu'à trouver un élément
+        let textarea = null;
+        for (const selector of textareaSelectors) {
+          const el = document.querySelector(selector);
+          if (el) {
+            textarea = el;
+            break;
+          }
+        }
+
+        if (!textarea) {
+          console.log(`[WintrChess] Textarea PGN non trouvé, nouvelle tentative dans ${getDelay(500)}ms`);
+          setTimeout(() => tryExtractPgn(attempts + 1), getDelay(500));
+          return;
+        }
+
+        try {
+          const pgn = textarea.value || null;
+          
+          if (pgn && pgn.includes("[Event")) {
+            closeSharePanel();
+            resolve(pgn);
+          } else {
+            console.log(`[WintrChess] PGN invalide, nouvelle tentative dans ${getDelay(500)}ms`);
+            setTimeout(() => tryExtractPgn(attempts + 1), getDelay(500));
+          }
+        } catch (error) {
+          console.error("[WintrChess] Erreur lors de l'extraction du PGN:", error);
+          setTimeout(() => tryExtractPgn(attempts + 1), getDelay(500));
+        }
+      };
+
+      // Commencer le processus
+      if (STATE.isSlowDevice) {
+        NotificationManager.show("Extraction du PGN sur un appareil lent, veuillez patienter...", 5000);
       }
+      tryOpenSharePanel();
     });
   }
 
@@ -934,7 +1106,6 @@
               if (elem.classList && elem.classList.contains("game-over-modal-content")) {
                 gameOverModalDetected = true;
                 setTimeout(() => {
-                  console.log("WintrChess: Modale de fin de partie détectée par l'observateur");
                   tryAddButtonToGameOverModal();
                 }, 300);
               }
@@ -1037,6 +1208,10 @@
   // ===== WINTRCHESS FUNCTIONS =====
 
   function initWintrChess() {
+    // Si l'appareil est lent, afficher une notification pour la patience
+    if (STATE.isSlowDevice) {
+      NotificationManager.show("Appareil lent détecté, préparation de l'analyse...", 5000);
+    }
     pasteAndAnalyze();
   }
 
