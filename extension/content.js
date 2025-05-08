@@ -459,7 +459,7 @@
           "Erreur lors de l'extraction du PGN. Veuillez réessayer.",
           5000
         );
-        throw error; // Re-throw pour que l'appelant puisse gérer
+        throw error;
       }
     },
   };
@@ -599,7 +599,6 @@
     const buttonList = modalContent.querySelector(".game-over-modal-buttons");
     if (!buttonList) return false;
 
-    // Vérifier si le bouton physique existe déjà (au cas où il n'est pas dans buttonInstances)
     if (
       buttonList.querySelector(
         ".wintchess-button-container.game-over-review-button-component .wintchess-button"
@@ -615,7 +614,7 @@
       const button = createWintrChessButton("gameOver");
       const buttonContainer = document.createElement("div");
       buttonContainer.className =
-        "wintchess-button-container game-over-review-button-component"; // Utiliser la même classe pour le style
+        "wintchess-button-container game-over-review-button-component";
       buttonContainer.appendChild(button);
 
       let insertionPoint = null;
@@ -689,7 +688,7 @@
       hide() {
         if (!activeNotification) return;
         activeNotification.style.opacity = "0";
-        setTimeout(() => this.clear(), 500); // Attendre la fin de la transition
+        setTimeout(() => this.clear(), 500);
       },
       clear() {
         if (timerId) clearTimeout(timerId);
@@ -727,7 +726,6 @@
     if (platform === "chess.com") {
       const bilanButton = findGameReviewButton();
       if (bilanButton && bilanButton.parentNode) {
-        // Ajouter une cible prioritaire pour se placer après le bouton Bilan
         targets = [
           { element: bilanButton, method: "afterend", priority: 100 },
           ...targets,
@@ -778,14 +776,13 @@
               checkExisting,
             }));
 
-        // Si le bouton spécifique à cet ID est déjà ajouté et dans le DOM, ne rien faire.
         const existingInstance = STATE.buttonInstances.get(id);
         if (
           checkExisting &&
           existingInstance &&
           document.contains(existingInstance.button)
         ) {
-          STATE.buttonAdded = true; // S'assurer que l'état global est correct
+          STATE.buttonAdded = true;
           return true;
         }
 
@@ -795,13 +792,12 @@
         }
 
         if (document.readyState !== "complete" && attempts < 5) {
-          setTimeout(() => actualRetryFn(attempts + 1), CONFIG.RETRY_DELAY / 2); // Essai plus rapide si doc pas prêt
+          setTimeout(() => actualRetryFn(attempts + 1), CONFIG.RETRY_DELAY / 2);
           return false;
         }
 
         let button = buttonCache.get(id);
         if (!button || !document.contains(button)) {
-          // Recréer si pas en cache ou plus dans le DOM
           button = buttonCreator();
           buttonCache.set(id, button);
         }
@@ -820,7 +816,7 @@
           console.warn(
             `[WintrChess] Max attempts reached for button ${id}. Resetting after long delay.`
           );
-          setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY * 2); // Pause plus longue avant de reset
+          setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY * 2);
         }
         return false;
       },
@@ -843,7 +839,7 @@
           } else if (typeof selector === "string") {
             const elements = document.querySelectorAll(selector);
             if (elements.length > 0) {
-              elementToAttachTo = elements[0]; // Prendre le premier trouvé
+              elementToAttachTo = elements[0];
             }
           }
 
@@ -878,7 +874,6 @@
                 elementToAttachTo.nextSibling
               );
             } else {
-              // "beforebegin", "afterbegin"
               elementToAttachTo.insertAdjacentElement(method, button);
             }
             STATE.buttonInstances.set(id, {
@@ -926,7 +921,6 @@
         }
         STATE.buttonInstances.delete(id);
         buttonCache.delete(id);
-        // Si c'est le dernier bouton, mettre à jour STATE.buttonAdded
         if (STATE.buttonInstances.size === 0) {
           STATE.buttonAdded = false;
         }
@@ -959,9 +953,7 @@
             'button.cc-modal-header-close[aria-label="Fermer"], .share-menu-close, button[aria-label="Close"]'
           );
           if (closeButton) closeButton.click();
-        } catch (e) {
-          /* console.warn("[WintrChess] Erreur fermeture panneau:", e.message); */
-        }
+        } catch (e) {}
       };
 
       const clickElementWithRetry = async (
@@ -1051,7 +1043,6 @@
         ) {
           return reject("Échec de l'ouverture du panneau de partage");
         }
-        // Attente adaptative pour l'apparition du panneau
         await Utils.sleep(getDelay(STATE.isSlowDevice ? 1000 : 500));
 
         const pgnTabSelectors = [
@@ -1113,11 +1104,11 @@
     );
     // Sélecteurs spécifiques pour le bouton "Bilan", du plus précis au plus générique
     const selectors = [
-      "button.game-over-review-button-component", // Modale de fin de partie
-      ".game-over-buttons-component .button-with-icon-primary", // Autre cas de modale
-      ".sidebar-buttons-container button.ui_v5-button-component.primary", // Barre latérale
+      "button.game-over-review-button-component",
+      ".game-over-buttons-component .button-with-icon-primary",
+      ".sidebar-buttons-container button.ui_v5-button-component.primary",
       ".board-layout-sidebar .review-button-component button",
-      ".layout-sidebar .review-button-component button", // Nouvelle interface
+      ".layout-sidebar .review-button-component button",
       // Sélecteurs plus génériques si les précédents échouent
       "button.cc-button-component.cc-button-primary.cc-button-xx-large.cc-bg-primary",
       "button.cc-button-component.cc-button-primary",
@@ -1220,7 +1211,6 @@
         textarea.select();
         await Utils.sleep(100);
 
-        // Utiliser l'affectation directe de valeur et les événements semble plus robuste
         textarea.value = pgnToPaste;
         textarea.dispatchEvent(
           new Event("input", { bubbles: true, cancelable: true })
@@ -1262,35 +1252,33 @@
         elements &&
         (await performPaste(elements.textarea, elements.button))
       ) {
-        return; // Succès
+        return;
       }
 
       attempts++;
       if (attempts >= maxAttempts) {
-        console.warn(
-          `[WintrChess] Impossible de coller le PGN sur WintrChess après ${maxAttempts} tentatives.`
-        );
         NotificationManager.show(
           "Collage auto échoué. Veuillez coller le PGN manuellement.",
           5000
         );
-        // Optionnel: copier le PGN dans le presse-papier pour l'utilisateur
-        // if (navigator.clipboard && pgnToPaste) {
-        //    await navigator.clipboard.writeText(pgnToPaste);
-        //    NotificationManager.show("PGN copié dans le presse-papiers.", 3000);
-        // }
+        if (navigator.clipboard && pgnToPaste) {
+          await navigator.clipboard.writeText(pgnToPaste);
+          NotificationManager.show(
+            "Collage auto échoué. Veuillez coller le PGN manuellement (PGN copié dans le presse-papiers).",
+            5000
+          );
+        }
         return;
       }
 
-      delayMs = Math.min(delayMs * 1.2, CONFIG.LONG_RETRY_DELAY); // Augmentation plus douce
+      delayMs = Math.min(delayMs * 1.2, CONFIG.LONG_RETRY_DELAY);
       setTimeout(attemptPasteRecursive, delayMs);
     };
 
-    setTimeout(attemptPasteRecursive, STATE.isSlowDevice ? 800 : 500); // Délai initial
+    setTimeout(attemptPasteRecursive, STATE.isSlowDevice ? 800 : 500);
   }
 
   function findWintrChessButtonByText(textOptions) {
-    // Renommé pour clarté
     const allButtons = Array.from(
       document.querySelectorAll("button:not([disabled])")
     );
