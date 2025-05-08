@@ -188,7 +188,7 @@
     if (/^\/game\/(live|daily|computer)\/\d+/.test(path)) {
       isRelevantPage = true;
       gameId = path.split("/").pop();
-    } else if (/^\/analysis|^\/game\//.test(path)) {
+    } else if (/^\/analysis|^\/game\/|^\/play\/online/.test(path)) {
       isRelevantPage = true;
     }
 
@@ -1026,6 +1026,10 @@
           'button[aria-label="Share"]',
           ".icon-font-chess.share",
           '[data-cy="share-button"]',
+          "button.share-button",
+          "button.game-controls-component__share",
+          'button[title="Share"]',
+          'button[title="Partager"]',
         ];
         if (STATE.isSlowDevice) {
           // Sélecteurs plus génériques pour appareils lents
@@ -1042,24 +1046,27 @@
           !(await clickElementWithRetry(
             shareButtonSelectors,
             "bouton de partage",
-            5
+            STATE.isSlowDevice ? 8 : 5
           ))
         ) {
           return reject("Échec de l'ouverture du panneau de partage");
         }
-        await Utils.sleep(getDelay(300)); // Attente pour l'apparition du panneau
+        // Attente adaptative pour l'apparition du panneau
+        await Utils.sleep(getDelay(STATE.isSlowDevice ? 1000 : 500));
 
         const pgnTabSelectors = [
           'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
           'button.cc-tab-item-component[aria-controls="tabpanel-pgn"]',
-          // 'button.cc-tab-item-component:not([aria-selected="true"])', // Trop générique, peut cliquer sur autre chose
           'button[id*="pgn"]',
           'button[aria-controls*="pgn"]',
+          "div.tabs button",
+          "li.tab-pgn",
+          ".share-menu-tabs .tab",
           {
             findFn: () =>
               Array.from(
                 document.querySelectorAll(
-                  ".share-menu-tab button, .cc-tabs-component button"
+                  ".share-menu-tab button, .cc-tabs-component button, .modal-tabs button, .tabs button, nav.tabs button, .tabs-component button"
                 )
               ).find((btn) => btn.textContent?.toUpperCase().includes("PGN")),
           },
@@ -1075,7 +1082,8 @@
           closeSharePanel();
           return reject("Onglet PGN non trouvé");
         }
-        await Utils.sleep(getDelay(1000)); // Attente pour le chargement du PGN
+        // Augmenter le délai d'attente pour le chargement du PGN
+        await Utils.sleep(getDelay(STATE.isSlowDevice ? 1500 : 1000));
 
         const pgn = await extractPgnValue(5, getDelay(500));
         closeSharePanel();
