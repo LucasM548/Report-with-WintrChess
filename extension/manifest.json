@@ -3,10 +3,7 @@
   "name": "Chess Sites to WintrChess PGN Transfer",
   "version": "1.0",
   "description": "Free analysis of your games on Lichess/Chess.com with WintrChess.",
-  "permissions": [
-    "storage",
-    "tabs"
-  ],
+  "permissions": ["storage"],
   "host_permissions": [
     "https://lichess.org/*",
     "https://www.chess.com/*",
