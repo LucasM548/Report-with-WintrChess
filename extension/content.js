@@ -2,7 +2,6 @@
   "use strict";
 
   // Configuration
-  // Contenu SVG réutilisable pour tous les boutons
   const CHESS_ICON_SVG = `<svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
   </svg>`;
@@ -17,19 +16,16 @@
     AUTO_PASTE_DELAY: 500,
     BUTTON_CHECK_INTERVAL: 5000,
     DEBOUNCE_DELAY: 500,
-    SLOW_DEVICE_THRESHOLD: 50, // Seuil pour détecter un appareil lent (ms)
+    SLOW_DEVICE_THRESHOLD: 50,
     BUTTON_SELECTORS: {
-      // Termes pour trouver les boutons d'analyse/bilan
       REVIEW_TERMS: ["bilan", "review", "analysis", "analyser", "analyze"],
-      // Sélecteurs génériques partagés
       SHARED: [
         {
-          selector: ".game-over-modal-content",
+          selector: ".game-over-modal-content", // Pour Chess.com, mais gardé comme partagé au cas où
           method: "append",
           priority: 20,
         },
       ],
-      // Sélecteurs spécifiques à Chess.com
       CHESS_COM: [
         { selector: ".board-controls-bottom", method: "append", priority: 15 },
         { selector: ".analysis-controls", method: "append", priority: 14 },
@@ -37,7 +33,6 @@
         { selector: ".game-controls", method: "append", priority: 12 },
         { selector: ".post-game-controls", method: "append", priority: 11 },
       ],
-      // Sélecteurs spécifiques à Lichess
       LICHESS: [
         { selector: ".analyse__tools", method: "append", priority: 10 },
         { selector: ".study__buttons", method: "append", priority: 9 },
@@ -50,35 +45,26 @@
     },
   };
 
-  // État global optimisé avec Map pour de meilleures performances
   const STATE = {
     buttonAdded: false,
     observer: null,
-    lastAttemptTime: 0,
     platform: null,
     buttonInstances: new Map(),
-    platformDetected: false,
     isSlowDevice: false,
     performanceFactor: 1,
   };
 
-  // Détection des performances de l'appareil
   function detectDevicePerformance() {
     const startTime = performance.now();
     let counter = 0;
-
-    // Test de performance simple
     for (let i = 0; i < 1000000; i++) {
       counter++;
     }
-
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-    // Si le test prend plus de X ms, considérer l'appareil comme lent
     if (duration > CONFIG.SLOW_DEVICE_THRESHOLD) {
       STATE.isSlowDevice = true;
-      // Calculer un facteur de performance entre 1.5 et 5 en fonction de la lenteur
       STATE.performanceFactor = Math.min(5, Math.max(1.5, duration / 20));
       console.log(
         `[WintrChess] Appareil lent détecté. Facteur de performance: ${STATE.performanceFactor.toFixed(
@@ -90,91 +76,84 @@
         `[WintrChess] Appareil rapide détecté. Temps: ${duration.toFixed(2)}ms`
       );
     }
-
     return duration;
   }
 
   const chromeStorage = {
-    setValue: (key, value) => {
-      return new Promise((resolve) => {
-        chrome.storage.local.set({ [key]: value }, resolve);
-      });
-    },
-    getValue: (key, defaultValue) => {
-      return new Promise((resolve) => {
-        chrome.storage.local.get([key], (result) => {
-          resolve(result[key] === undefined ? defaultValue : result[key]);
-        });
-      });
-    },
-    deleteValue: (key) => {
-      return new Promise((resolve) => {
-        chrome.storage.local.remove(key, resolve);
-      });
-    },
+    setValue: (key, value) =>
+      new Promise((resolve) =>
+        chrome.storage.local.set({ [key]: value }, resolve)
+      ),
+    getValue: (key, defaultValue) =>
+      new Promise((resolve) =>
+        chrome.storage.local.get([key], (result) =>
+          resolve(result[key] === undefined ? defaultValue : result[key])
+        )
+      ),
+    deleteValue: (key) =>
+      new Promise((resolve) => chrome.storage.local.remove(key, resolve)),
   };
 
   function init() {
-    // Détection des performances avant tout
     detectDevicePerformance();
+    const hostname = window.location.hostname;
 
-    if (window.location.hostname === "lichess.org") {
-      initLichess();
-    } else if (window.location.hostname === "www.chess.com") {
-      initChessCom();
-    } else if (window.location.hostname === "wintrchess.com") {
+    if (hostname === "lichess.org") {
+      initializePlatformSpecificLogic("lichess", getLichessPageInfo);
+    } else if (hostname === "www.chess.com") {
+      initializePlatformSpecificLogic("chess.com", getChessComPageInfo);
+    } else if (hostname === "wintrchess.com") {
       initWintrChess();
     }
   }
 
-  // ===== LICHESS FUNCTIONS =====
-
-  function initLichess() {
-    const pageInfo = getLichessPageInfo();
+  // ===== INITIALISATION GÉNÉRALISÉE POUR LES PLATEFORMES =====
+  function initializePlatformSpecificLogic(platformName, getPageInfoFn) {
+    const pageInfo = getPageInfoFn();
 
     if (pageInfo.isRelevantPage) {
-      const lichessPlatform = "lichess";
+      STATE.platform = platformName; // Assurer que STATE.platform est défini tôt
 
       DomObserverManager.setupObserver(
-        () => tryAddButton(lichessPlatform),
-        lichessPlatform
+        () => tryAddButton(platformName),
+        platformName
       );
 
-      tryAddButton(lichessPlatform);
+      tryAddButton(platformName); // Premier essai
 
-      const loadHandler = Utils.debounce(
-        () => tryAddButton(lichessPlatform),
+      const debouncedTryAddButton = Utils.debounce(
+        () => tryAddButton(platformName),
         CONFIG.RETRY_DELAY
       );
-      window.addEventListener("load", loadHandler);
 
+      window.addEventListener("load", debouncedTryAddButton);
       window.addEventListener("hashchange", () => {
         ButtonManager.removeAllButtons();
-        loadHandler();
+        debouncedTryAddButton();
       });
 
       const periodicCheck = setInterval(() => {
-        if (document.visibilityState === "hidden") {
-          return;
-        }
+        if (document.visibilityState === "hidden") return;
 
-        // Vérifier si le bouton existe toujours
+        // Si le bouton n'est pas visible ou a été retiré, essayer de le rajouter
+        // tryAddButton gère les cas spécifiques comme la modal de fin de partie pour chess.com
         if (
           !STATE.buttonAdded ||
           !document.querySelector(".wintchess-button")
         ) {
-          tryAddButton(lichessPlatform);
+          tryAddButton(platformName);
         }
       }, CONFIG.BUTTON_CHECK_INTERVAL);
 
-      // Nettoyage lors de la fermeture de la page
       window.addEventListener("beforeunload", () => {
         clearInterval(periodicCheck);
         DomObserverManager.disconnectExisting();
+        ButtonManager.removeAllButtons(); // S'assurer que tout est nettoyé
       });
     }
   }
 
+  // ===== LICHESS FUNCTIONS =====
   function getLichessPageInfo() {
     const pathParts = window.location.pathname
       .split("/")
@@ -184,137 +163,127 @@
     let isRelevantPage = false;
 
     if (pathParts.length > 0) {
-      // Page de jeu (format: /abc12345)
       if (/^[a-zA-Z0-9]{8,}$/.test(pathParts[0])) {
         isRelevantPage = true;
         gameId = pathParts[0];
-      }
-      // Page d'étude (format: /study/abc12345/chapitreXYZ)
-      else if (pathParts[0] === "study" && pathParts.length >= 2) {
+      } else if (pathParts[0] === "study" && pathParts.length >= 2) {
         isRelevantPage = true;
         studyId = pathParts[1];
-      }
-      // Page d'analyse
-      else if (pathParts[0] === "analysis") {
+        // Note: PgnExtractor.fromLichess utilise gameId. Si les PGN d'études doivent être extraits,
+        // il faudra ajuster PgnExtractor ou passer studyId.
+      } else if (pathParts[0] === "analysis") {
         isRelevantPage = true;
       }
     }
-
     return { isRelevantPage, gameId, studyId };
   }
 
+  // ===== CHESS.COM FUNCTIONS =====
+  function getChessComPageInfo() {
+    const path = window.location.pathname;
+    let gameId = null;
+    let isRelevantPage = false;
+    let isReviewPage = false;
+
+    if (/^\/game\/(live|daily|computer)\/\d+/.test(path)) {
+      isRelevantPage = true;
+      gameId = path.split("/").pop();
+    } else if (/^\/analysis|^\/game\//.test(path)) {
+      isRelevantPage = true;
+    }
+
+    if (
+      /^\/analysis\/game\/(live|daily|computer)|^\/game-report|^\/analysis\/game-report/.test(
+        path
+      )
+    ) {
+      isReviewPage = true;
+    }
+    if (
+      !isReviewPage &&
+      document.querySelector(".game-report-section, .game-review-container")
+    ) {
+      isReviewPage = true;
+    }
+    return { isRelevantPage, gameId, isReviewPage };
+  }
+
   const DomObserverManager = {
-    // Tableau des éléments considérés comme pertinents par plateforme
     relevantClassesByPlatform: {
-      lichess: ["analyse__tools"],
+      lichess: ["analyse__tools", "study__buttons", "analyse__controls"],
       "chess.com": [
         "board-controls",
         "game-controls",
         "post-game-controls",
         "game-over-modal-content",
         "analysis-controls",
+        "modal-header-header",
       ],
     },
-
-    relevantSelectors: null,
     relevantNodeNames: new Set(["chess-board"]),
 
     setupObserver(callback, platform = STATE.platform) {
       this.disconnectExisting();
 
-      // Configuration des sélecteurs pertinents pour la plateforme
-      this.relevantSelectors = new Set(
+      const platformRelevantClasses = new Set(
         this.relevantClassesByPlatform[platform] || []
       );
 
-      // Définition de la configuration de l'observateur en fonction de la plateforme
       const observerConfig = {
         childList: true,
         subtree: true,
-        attributes:
-          platform === "lichess" // Ajouter les attributs uniquement pour Lichess
-            ? {
-                attributes: true,
-                attributeFilter: ["class"],
-              }
-            : {},
+        // Pour Lichess, les changements de classe sont importants pour certains conteneurs.
+        // Pour Chess.com, on se fie plus aux ajouts de nœuds.
+        attributes: platform === "lichess",
+        attributeFilter: platform === "lichess" ? ["class"] : undefined,
       };
 
-      let processedCallback;
+      const debouncedCallback = Utils.debounce(callback, CONFIG.DEBOUNCE_DELAY);
 
-      if (platform === "chess.com") {
-        processedCallback = (mutations) => {
-          let shouldCallback = false;
-          let gameOverModalDetected = false;
+      const processedCallback = (mutationsList) => {
+        // Éviter de traiter si un bouton existe DÉJÀ dans le cas général,
 
-          for (const mutation of mutations) {
-            if (mutation.addedNodes.length) {
-              for (const node of mutation.addedNodes) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                  const elem = node;
-
-                  if (
-                    elem.classList &&
-                    elem.classList.contains("game-over-modal-content")
-                  ) {
-                    gameOverModalDetected = true;
-                    setTimeout(() => {
-                      tryAddButtonToGameOverModal();
-                    }, 300);
-                  }
-
-                  if (elem.classList) {
-                    for (const cls of this.relevantSelectors) {
-                      if (elem.classList.contains(cls)) {
-                        shouldCallback = true;
-                        break;
-                      }
-                    }
-
-                    // Vérifier le nom du nœud
-                    if (
-                      this.relevantNodeNames.has(elem.nodeName.toLowerCase())
-                    ) {
-                      shouldCallback = true;
-                    }
-                  }
+        let hasRelevantChanges = false;
+        for (const mutation of mutationsList) {
+          if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
+            for (const node of mutation.addedNodes) {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                const elem = node;
+                if (
+                  this.isElementOrContainsRelevant(
+                    elem,
+                    platformRelevantClasses
+                  )
+                ) {
+                  hasRelevantChanges = true;
+                  break;
                 }
               }
             }
+          } else if (
+            mutation.type === "attributes" &&
+            mutation.target.nodeType === Node.ELEMENT_NODE
+          ) {
+            if (
+              this.isElementOrContainsRelevant(
+                mutation.target,
+                platformRelevantClasses
+              )
+            ) {
+              hasRelevantChanges = true;
+            }
           }
-          if (shouldCallback && !gameOverModalDetected) {
-            callback();
-          }
-        };
-      } else {
-        // Callback générique pour Lichess
-        processedCallback = Utils.debounce((mutationsList) => {
-          // Éviter de traiter si un bouton existe déjà
-          if (document.querySelector(".wintchess-button")) return;
+          if (hasRelevantChanges) break;
+        }
 
-          const hasRelevantChanges = mutationsList.some(
-            (mutation) =>
-              (mutation.type === "childList" &&
-                mutation.addedNodes.length > 0) ||
-              (mutation.type === "attributes" &&
-                this.isRelevantElement(mutation.target, platform))
-          );
+        if (hasRelevantChanges) {
+          debouncedCallback();
+        }
+      };
 
-          if (hasRelevantChanges) {
-            callback();
-          }
-        }, CONFIG.DEBOUNCE_DELAY);
-      }
-
-      // Création et démarrage de l'observateur
       STATE.observer = new MutationObserver(processedCallback);
-
-      // Observer le document entier pour Chess.com, seulement le body pour Lichess
-      const targetNode =
-        platform === "chess.com" ? document.documentElement : document.body;
-
-      STATE.observer.observe(targetNode, observerConfig);
-
+      // Observer document.documentElement pour une couverture plus large, surtout pour les modales.
+      STATE.observer.observe(document.documentElement, observerConfig);
       return STATE.observer;
     },
 
@@ -325,21 +294,40 @@
       }
     },
 
-    isRelevantElement(element, platform) {
-      if (!element || !element.classList) return false;
+    // Vérifie si l'élément lui-même est pertinent ou s'il contient des enfants pertinents (utile pour les ajouts de subtree)
+    isElementOrContainsRelevant(element, platformRelevantClasses) {
+      if (!element || typeof element.matches !== "function") return false;
 
-      // Vérifier les classes pertinentes
-      for (const className of this.relevantSelectors) {
-        if (element.classList.contains(className)) {
+      // Vérifier l'élément lui-même
+      if (this.isRelevantSingleElement(element, platformRelevantClasses))
+        return true;
+
+      // Vérifier les enfants (si l'élément ajouté est un conteneur)
+      for (const cls of platformRelevantClasses) {
+        if (element.querySelector(`.${cls.split(" ").join(".")}`)) return true;
+      }
+      for (const nodeName of this.relevantNodeNames) {
+        if (element.querySelector(nodeName)) return true;
+      }
+      return false;
+    },
+
+    isRelevantSingleElement(element, platformRelevantClasses) {
+      if (!element || !element.classList) return false;
+      for (const className of platformRelevantClasses) {
+        // Gérer les sélecteurs de classes multiples (ex: "analyse__controls .left-buttons")
+        const classParts = className.split(" ");
+        if (
+          classParts.every((part) =>
+            element.classList.contains(part.replace(".", ""))
+          )
+        ) {
           return true;
         }
       }
-
-      // Vérifier les noms de nœuds pertinents
       if (this.relevantNodeNames.has(element.nodeName.toLowerCase())) {
         return true;
       }
-
       return false;
     },
   };
@@ -348,53 +336,44 @@
     _cache: new Map(),
     _cacheDuration: 60000,
 
-    // Efface une entrée du cache après un certain temps
     _setCacheWithExpiry(key, value) {
       if (!value) return;
-
-      const cacheItem = {
-        value,
-        timestamp: Date.now(),
-      };
-
+      const cacheItem = { value, timestamp: Date.now() };
       this._cache.set(key, cacheItem);
-
       setTimeout(() => {
-        if (this._cache.has(key)) {
-          this._cache.delete(key);
-        }
+        if (this._cache.get(key) === cacheItem) this._cache.delete(key);
       }, this._cacheDuration);
     },
 
-    // Vérifie si une entrée du cache est encore valide
     _getFromCache(key) {
       const cacheItem = this._cache.get(key);
-
-      if (!cacheItem) return null;
-
-      // Vérifier si le cache est expiré
-      const now = Date.now();
-      if (now - cacheItem.timestamp > this._cacheDuration) {
-        this._cache.delete(key);
+      if (
+        !cacheItem ||
+        Date.now() - cacheItem.timestamp > this._cacheDuration
+      ) {
+        if (cacheItem) this._cache.delete(key);
         return null;
       }
-
       return cacheItem.value;
     },
 
-    // Extraction pour Lichess
     async fromLichess() {
       const pageInfo = getLichessPageInfo();
-
-      if (!pageInfo.gameId) {
+      // Actuellement, utilise gameId. Pour les études, il faudrait utiliser studyId et une URL d'API différente.
+      // Exemple: `https://lichess.org/study/${pageInfo.studyId}.pgn`
+      if (!pageInfo.gameId && !pageInfo.studyId) {
+        // Ajusté pour inclure studyId comme possibilité
         console.log(
-          "[WintrChess] Impossible de récupérer le PGN: pas d'identifiant de partie détecté"
+          "[WintrChess] Impossible de récupérer le PGN: pas d'identifiant de partie/étude détecté"
         );
         return null;
       }
 
-      // Vérifier le cache d'abord
-      const cacheKey = `lichess_${pageInfo.gameId}`;
+      // Pour l'instant, on priorise gameId s'il existe, sinon on pourrait adapter pour studyId
+      const idToFetch = pageInfo.gameId || pageInfo.studyId;
+      const isStudy = !pageInfo.gameId && pageInfo.studyId;
+
+      const cacheKey = `lichess_${idToFetch}`;
       const cachedPgn = this._getFromCache(cacheKey);
       if (cachedPgn) {
         console.log("[WintrChess] PGN récupéré depuis le cache pour Lichess");
@@ -402,10 +381,9 @@
       }
 
       try {
-        const pgn = await fetchPgnFromApi(pageInfo.gameId);
+        const pgn = await fetchPgnFromApi(idToFetch, isStudy);
         if (pgn) {
           this._setCacheWithExpiry(cacheKey, pgn);
-          console.log("[WintrChess] PGN pour Lichess mis en cache");
         }
         return pgn;
       } catch (error) {
@@ -416,37 +394,109 @@
         return null;
       }
     },
+
+    async fromChessCom() {
+      const pageInfo = getChessComPageInfo();
+      const cacheKey = `chesscom_${
+        pageInfo.gameId || window.location.pathname
+      }`;
+      const cachedPgn = this._getFromCache(cacheKey);
+      if (cachedPgn) {
+        console.log("[WintrChess] PGN récupéré depuis le cache");
+        return cachedPgn;
+      }
+
+      NotificationManager.show(
+        STATE.isSlowDevice
+          ? "Extraction du PGN en cours (appareil lent)..."
+          : "Extraction du PGN en cours...",
+        STATE.isSlowDevice ? 8000 : 3000
+      );
+
+      try {
+        if (STATE.isSlowDevice) {
+          await Utils.sleep(1000 * STATE.performanceFactor);
+        }
+
+        let pgn = null;
+        let attempts = 0;
+        const maxAttempts = STATE.isSlowDevice ? 3 : 2;
+
+        while (!pgn && attempts < maxAttempts) {
+          try {
+            pgn = await getPgnFromSharePanel();
+            if (!pgn && attempts < maxAttempts - 1) {
+              const waitTime =
+                1000 *
+                (attempts + 1) *
+                (STATE.isSlowDevice ? STATE.performanceFactor : 1);
+              console.log(`[WintrChess] Nouvelle tentative dans ${waitTime}ms`);
+              await Utils.sleep(waitTime);
+            }
+          } catch (err) {
+            console.error(
+              `[WintrChess] Erreur tentative ${attempts + 1}:`,
+              err
+            );
+          } finally {
+            attempts++;
+          }
+        }
+
+        if (pgn) {
+          this._setCacheWithExpiry(cacheKey, pgn);
+          return pgn;
+        }
+        throw new Error(
+          "Impossible de récupérer le PGN depuis la page Chess.com après plusieurs tentatives."
+        );
+      } catch (error) {
+        console.error(
+          "[WintrChess] Erreur lors de l'extraction du PGN:",
+          error
+        );
+        NotificationManager.show(
+          "Erreur lors de l'extraction du PGN. Veuillez réessayer.",
+          5000
+        );
+        throw error; // Re-throw pour que l'appelant puisse gérer
+      }
+    },
   };
 
-  // Méthode d'extraction depuis l'API Lichess
-  function fetchPgnFromApi(gameId) {
-    const apiUrl = `https://lichess.org/game/export/${gameId}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
+  function fetchPgnFromApi(id, isStudy = false) {
+    const apiUrl = isStudy
+      ? `https://lichess.org/study/${id}.pgn?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false` // Adaptez les params si besoin pour les études
+      : `https://lichess.org/game/export/${id}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
 
     return new Promise((resolve, reject) => {
-      // Communication avec le background script
       chrome.runtime.sendMessage(
         { action: "fetchPgn", url: apiUrl },
         (response) => {
+          if (chrome.runtime.lastError) {
+            return reject(chrome.runtime.lastError.message);
+          }
           if (response && response.success) {
             resolve(response.data.trim());
           } else {
-            reject(response ? response.error : "Erreur de communication");
+            reject(
+              response
+                ? response.error
+                : "Erreur de communication avec le background script"
+            );
           }
         }
       );
     });
   }
 
-  // Factory pour la création de boutons
   const ButtonFactory = {
     create(options) {
       const { className, style, innerHTML, onClick } = options;
-
       const button = document.createElement("button");
-      button.className = className + " wintchess-button";
+      button.className = className + " wintchess-button"; // Toujours ajouter wintchess-button
       button.style.cssText = style;
       button.innerHTML = innerHTML;
-
       this.attachEventHandler(button, onClick);
       return button;
     },
@@ -454,6 +504,7 @@
     attachEventHandler(button, onClickHandler) {
       button.addEventListener("click", async (event) => {
         event.stopPropagation();
+        event.preventDefault(); // Peut être utile pour éviter des comportements par défaut
         button.disabled = true;
 
         const textElement = button.querySelector(".button-text") || button;
@@ -469,613 +520,424 @@
               url: CONFIG.WINTRCHESS_URL,
             });
           } else {
-            NotificationManager.show("Impossible de récupérer le PGN");
+            NotificationManager.show("Impossible de récupérer le PGN.");
           }
         } catch (error) {
-          console.error("Erreur:", error);
-          NotificationManager.show("Erreur lors de la récupération du PGN");
+          console.error(
+            "[WintrChess] Erreur lors du clic sur le bouton:",
+            error
+          );
+          NotificationManager.show(
+            "Erreur: " + (error.message || "Impossible de récupérer le PGN.")
+          );
         } finally {
-          // Restauration différée de l'état du bouton
           setTimeout(() => {
-            button.disabled = false;
-            textElement.textContent = originalText;
+            if (button && button.isConnected) {
+              // Vérifier si le bouton est toujours dans le DOM
+              button.disabled = false;
+              textElement.textContent = originalText;
+            }
           }, 1000);
         }
       });
     },
   };
 
-  // Configuration des styles et classes pour les boutons par type
   const BUTTON_CONFIGS = {
     lichess: {
       className: "button button-metal",
-      style: `
-      display: block;
-      width: calc(100% - 10px);
-      margin: 8px auto;
-      padding: 5px 10px;
-    `,
+      style: `display: block; width: calc(100% - 10px); margin: 8px auto; padding: 5px 10px;`,
       innerHTML: `<span class="button-text">${CONFIG.BUTTON_TEXT}</span>`,
     },
     chesscom: {
       className:
         "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-      style: `
-      margin-top: 8px;
-      width: 100%;
-      margin-bottom: 6px;
-    `,
-      innerHTML: `
-      <span class="cc-icon-glyph cc-icon-large cc-button-icon">
-        ${CHESS_ICON_SVG}
-      </span>
-      <span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>
-    `,
+      style: `margin-top: 8px; width: 100%; margin-bottom: 6px;`,
+      innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon">${CHESS_ICON_SVG}</span><span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>`,
     },
     gameOver: {
+      // Spécifique à la modal de fin de partie de Chess.com
       className:
         "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-      style: `
-        width: 100%;
-        margin-top: 3px;
-        margin-bottom: 6px;
-      `,
-      innerHTML: `
-        <span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">
-          ${CHESS_ICON_SVG}
-        </span>
-        <span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${CONFIG.BUTTON_TEXT}</span>
-      `,
+      style: `width: 100%; margin-top: 3px; margin-bottom: 6px;`,
+      innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">${CHESS_ICON_SVG}</span><span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${CONFIG.BUTTON_TEXT}</span>`,
     },
   };
 
-  function createButton(type = STATE.platform) {
-    const config =
-      type === "gameOver"
-        ? BUTTON_CONFIGS.gameOver
-        : BUTTON_CONFIGS[type] || BUTTON_CONFIGS.lichess;
+  function createWintrChessButton(type = STATE.platform) {
+    const typeKey = type === "chess.com" ? "chesscom" : type;
+    const config = BUTTON_CONFIGS[typeKey] || BUTTON_CONFIGS.lichess;
+
+    const pgnSourcePlatform =
+      type === "gameOver" ||
+      type === "chesscom" ||
+      STATE.platform === "chess.com"
+        ? "chess.com"
+        : "lichess";
 
     return ButtonFactory.create({
-      className: config.className,
-      style: config.style,
-      innerHTML: config.innerHTML,
-      onClick: () => {
-        const platform = STATE.platform || type.split("_")[0];
-        return platform === "chess.com" ||
-          type.includes("chess.com") ||
-          type === "gameOver"
+      ...config,
+      onClick: () =>
+        pgnSourcePlatform === "chess.com"
           ? PgnExtractor.fromChessCom()
-          : PgnExtractor.fromLichess();
-      },
+          : PgnExtractor.fromLichess(),
     });
   }
 
-  // Tente d'ajouter le bouton à la fenêtre modale de fin de partie
   function tryAddButtonToGameOverModal() {
     const modalContent = document.querySelector(".game-over-modal-content");
+    if (!modalContent) return false;
 
-    if (!modalContent) {
-      return false;
-    }
-
-    // Vérifier si le bouton existe déjà pour éviter les doublons
-    const existingButton = modalContent.querySelector(".wintchess-button");
-    if (existingButton) {
+    const buttonId = "chesscom_gameover_modal";
+    if (
+      STATE.buttonInstances.has(buttonId) &&
+      document.contains(STATE.buttonInstances.get(buttonId).button)
+    ) {
       return true;
     }
 
-    // Trouver la liste de boutons et la zone où ajouter notre bouton
     const buttonList = modalContent.querySelector(".game-over-modal-buttons");
-    if (!buttonList) {
-      return false;
+    if (!buttonList) return false;
+
+    // Vérifier si le bouton physique existe déjà (au cas où il n'est pas dans buttonInstances)
+    if (
+      buttonList.querySelector(
+        ".wintchess-button-container.game-over-review-button-component .wintchess-button"
+      )
+    ) {
+      return true;
     }
 
     try {
-      // Chercher directement le conteneur du bouton "Bilan"
       const bilanContainer = buttonList.querySelector(
         ".game-over-review-button-component"
       );
-
-      // Créer notre bouton WintrChess
-      const button = createButton("gameOver");
+      const button = createWintrChessButton("gameOver");
       const buttonContainer = document.createElement("div");
       buttonContainer.className =
-        "wintchess-button-container game-over-review-button-component";
+        "wintchess-button-container game-over-review-button-component"; // Utiliser la même classe pour le style
       buttonContainer.appendChild(button);
 
+      let insertionPoint = null;
+      let referenceNode = null;
+
       if (bilanContainer) {
-        // Insérer juste après le conteneur du bouton bilan
-        if (bilanContainer.parentElement) {
-          bilanContainer.parentElement.insertBefore(
-            buttonContainer,
-            bilanContainer.nextSibling
-          );
-        } else {
-          // Cas improbable: le conteneur n'a pas de parent
-          buttonList.appendChild(buttonContainer);
-        }
+        insertionPoint = bilanContainer.parentElement;
+        referenceNode = bilanContainer.nextSibling;
       } else {
-        // Si on ne trouve pas le conteneur du bouton bilan, essayer de trouver le texte
         const bilanLabel = Array.from(
           buttonList.querySelectorAll(".game-over-review-button-label, span")
-        ).find((span) => {
-          const text = span.textContent.toLowerCase();
-          return CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.some((term) =>
-            text.includes(term)
-          );
-        });
+        ).find((span) =>
+          CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.some((term) =>
+            span.textContent.toLowerCase().includes(term)
+          )
+        );
 
         if (bilanLabel) {
-          // Remonter jusqu'au conteneur parent
           const parentContainer =
             bilanLabel.closest("div") || bilanLabel.parentElement;
           if (parentContainer && parentContainer.parentElement) {
-            parentContainer.parentElement.insertBefore(
-              buttonContainer,
-              parentContainer.nextSibling
-            );
-          } else {
-            buttonList.appendChild(buttonContainer);
-          }
-        } else {
-          // Si toujours pas trouvé, ajouter au début de la liste
-          const firstChild = buttonList.firstChild;
-          if (firstChild) {
-            buttonList.insertBefore(buttonContainer, firstChild);
-          } else {
-            buttonList.appendChild(buttonContainer);
+            insertionPoint = parentContainer.parentElement;
+            referenceNode = parentContainer.nextSibling;
           }
         }
       }
 
-      // Stocker l'instance de bouton pour pouvoir le nettoyer plus tard
-      STATE.buttonInstances.set("gameOverModal", {
-        button: buttonContainer,
-        element: buttonList,
-        method: "insertBefore",
-      });
+      if (!insertionPoint) {
+        insertionPoint = buttonList;
+        referenceNode = buttonList.firstChild; // Insérer au début si aucune référence trouvée
+      }
 
-      STATE.buttonAdded = true;
-      return true;
+      if (insertionPoint) {
+        insertionPoint.insertBefore(buttonContainer, referenceNode);
+        STATE.buttonInstances.set(buttonId, {
+          button: buttonContainer,
+          element: insertionPoint,
+          method: "insertBefore",
+        });
+        STATE.buttonAdded = true;
+        return true;
+      }
+      return false;
     } catch (error) {
-      console.error("Erreur lors de l'ajout du bouton à la modale:", error);
+      console.error(
+        "[WintrChess] Erreur lors de l'ajout du bouton à la modale:",
+        error
+      );
       return false;
     }
   }
 
-  // Gestionnaire de notifications
   const NotificationManager = (() => {
     let activeNotification = null;
     let timerId = null;
+    const Z_INDEX = "2147483647";
 
     return {
       show(message, duration = 3000) {
         this.clear();
-
-        const notification = document.createElement("div");
-        notification.textContent = message;
-        notification.style.cssText = `
-          position: fixed;
-          top: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          padding: 10px 20px;
-          background-color: #333;
-          color: white;
-          border-radius: 4px;
-          z-index: 10000;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-          opacity: 1;
-          transition: opacity 0.5s ease;
-        `;
-
-        document.body.appendChild(notification);
-        activeNotification = notification;
-
+        activeNotification = document.createElement("div");
+        activeNotification.textContent = message;
+        activeNotification.style.cssText = `
+          position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+          padding: 10px 20px; background-color: #333; color: white;
+          border-radius: 4px; z-index: ${Z_INDEX}; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          opacity: 1; transition: opacity 0.5s ease; font-family: sans-serif; font-size: 14px;`;
+        document.body.appendChild(activeNotification);
         timerId = setTimeout(() => this.hide(), duration);
       },
-
       hide() {
         if (!activeNotification) return;
-
         activeNotification.style.opacity = "0";
-        setTimeout(() => this.clear(), 500);
+        setTimeout(() => this.clear(), 500); // Attendre la fin de la transition
       },
-
       clear() {
-        if (timerId) {
-          clearTimeout(timerId);
-          timerId = null;
+        if (timerId) clearTimeout(timerId);
+        timerId = null;
+        if (activeNotification && activeNotification.parentNode) {
+          activeNotification.parentNode.removeChild(activeNotification);
         }
-
-        if (activeNotification) {
-          if (activeNotification.parentNode) {
-            activeNotification.parentNode.removeChild(activeNotification);
-          }
-          activeNotification = null;
-        }
+        activeNotification = null;
       },
     };
   })();
 
-  function tryAddButton(platform = "lichess", attempts = 0) {
-    STATE.platform = platform;
+  function tryAddButton(platform, attempts = 0) {
+    if (!STATE.platform) STATE.platform = platform;
 
     if (platform === "chess.com") {
       const pageInfo = getChessComPageInfo();
       if (pageInfo.isReviewPage) {
+        ButtonManager.removeAllButtons();
         return false;
       }
-
-      // Vérifier si nous sommes dans la modale de fin de partie (priorité la plus haute)
+      // Tenter d'ajouter à la modale de fin de partie en priorité
       if (tryAddButtonToGameOverModal()) {
         return true;
       }
+      if (STATE.buttonInstances.has("chesscom_gameover_modal")) {
+        ButtonManager.removeButtonById("chesscom_gameover_modal");
+      }
+    }
 
-      // Chercher d'abord le bouton 'Bilan de la partie' pour Chess.com
-      let bilanButton = findGameReviewButton();
+    // Pour chess.com, après avoir géré la modal, on cherche le bouton "Bilan"
+    // mais on pourrait avoir une target prioritaire pour se placer après le bouton "Bilan".
+    let targets = ButtonManager.getTargets(platform);
+
+    if (platform === "chess.com") {
+      const bilanButton = findGameReviewButton();
       if (bilanButton && bilanButton.parentNode) {
-        return ButtonManager.addButton({
-          id: "chesscom_after_bilan",
-          buttonCreator: () => createButton("chesscom"),
-          targets: [
-            { selector: bilanButton, method: "afterend", priority: 20 },
-          ],
-          attempts,
-          retryFn: (newAttempts) => tryAddButton(platform, newAttempts),
-        });
+        // Ajouter une cible prioritaire pour se placer après le bouton Bilan
+        targets = [
+          { element: bilanButton, method: "afterend", priority: 100 },
+          ...targets,
+        ];
       }
     }
 
-    // Configuration commune pour toutes les plateformes
-    const config = {
-      id: platform === "chess.com" ? "chesscom_main" : "lichess_main",
-      buttonCreator: () =>
-        createButton(platform === "chess.com" ? "chesscom" : "lichess"),
-      targets: ButtonManager.getTargets(platform),
-      attempts,
+    const buttonId =
+      platform === "chess.com" ? "chesscom_main" : "lichess_main";
+
+    return ButtonManager.addButton({
+      id: buttonId,
+      buttonCreator: () => createWintrChessButton(platform),
+      targets: targets,
+      attempts: attempts,
       retryFn: (newAttempts) => tryAddButton(platform, newAttempts),
-    };
-
-    return ButtonManager.addButton(config);
+    });
   }
 
-  // ===== CHESS.COM FUNCTIONS =====
-
-  function initChessCom() {
-    const pageInfo = getChessComPageInfo();
-
-    if (pageInfo.isRelevantPage) {
-      DomObserverManager.setupObserver(
-        () => tryAddButton("chess.com"),
-        "chess.com"
-      );
-
-      tryAddButton("chess.com");
-
-      const loadHandler = Utils.debounce(
-        () => tryAddButton("chess.com"),
-        CONFIG.RETRY_DELAY
-      );
-      window.addEventListener("load", loadHandler);
-
-      window.addEventListener("hashchange", () => {
-        ButtonManager.removeAllButtons();
-        loadHandler();
-      });
-
-      const periodicCheck = setInterval(() => {
-        if (document.visibilityState === "hidden") {
-          return;
-        }
-
-        // Vérification préliminaire rapide avant d'essayer d'ajouter le bouton
-        const gameOverModal = document.querySelector(
-          ".game-over-modal-content"
-        );
-        const hasButton = document.querySelector(".wintchess-button-container");
-
-        // Si la modale de fin de partie est présente et que notre bouton n'y est pas
-        if (gameOverModal && !hasButton) {
-          tryAddButtonToGameOverModal();
-        } else if (
-          !STATE.buttonAdded ||
-          !document.querySelector(".wintchess-button")
-        ) {
-          tryAddButton("chess.com");
-        }
-      }, CONFIG.BUTTON_CHECK_INTERVAL);
-
-      // Nettoyage lors de la fermeture de la page
-      window.addEventListener("beforeunload", () => {
-        clearInterval(periodicCheck);
-        DomObserverManager.disconnectExisting();
-      });
-    }
-  }
-
-  function getChessComPageInfo() {
-    const path = window.location.pathname;
-    let gameId = null;
-    let isRelevantPage = false;
-    let isReviewPage = false;
-
-    // Vérification simplifiée des pages pertinentes avec une seule regex
-    if (/^\/game\/(live|daily|computer)\/\d+/.test(path)) {
-      isRelevantPage = true;
-      gameId = path.split("/").pop();
-    }
-    // Autres pages pertinentes (analyse ou pages de jeu génériques)
-    else if (/^\/analysis|^\/game\//.test(path)) {
-      isRelevantPage = true;
-    }
-
-    // Détection simplifiée des pages de bilan avec une regex optimisée
-    if (
-      /^\/analysis\/game\/(live|daily|computer)|^\/game-report|^\/analysis\/game-report/.test(
-        path
-      )
-    ) {
-      isReviewPage = true;
-    }
-
-    // Vérification des éléments de la page (cette vérification reste nécessaire)
-    if (
-      !isReviewPage &&
-      document.querySelector(".game-report-section, .game-review-container")
-    ) {
-      isReviewPage = true;
-    }
-
-    return { isRelevantPage, gameId, isReviewPage };
-  }
-
-  // Extraction pour Chess.com ajoutée au PgnExtractor
-  Object.assign(PgnExtractor, {
-    async fromChessCom() {
-      const pageInfo = getChessComPageInfo();
-
-      // Vérifier le cache d'abord
-      const cacheKey = `chesscom_${
-        pageInfo.gameId || window.location.pathname
-      }`;
-      const cachedPgn = this._getFromCache(cacheKey);
-      if (cachedPgn) {
-        console.log("[WintrChess] PGN récupéré depuis le cache");
-        return cachedPgn;
-      }
-
-      if (STATE.isSlowDevice) {
-        NotificationManager.show(
-          "Extraction du PGN en cours sur un appareil lent. Veuillez patienter...",
-          8000
-        );
-      } else {
-        NotificationManager.show("Extraction du PGN en cours...", 3000);
-      }
-
-      try {
-        // Si c'est un appareil lent, donner plus de temps à la page pour se stabiliser avant l'extraction
-        if (STATE.isSlowDevice) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000 * STATE.performanceFactor)
-          );
-        }
-
-        // Plusieurs tentatives d'extraction avec un temps d'attente croissant
-        let pgn = null;
-        let attempts = 0;
-        const maxAttempts = STATE.isSlowDevice ? 3 : 2;
-
-        while (!pgn && attempts < maxAttempts) {
-          try {
-            console.log(
-              `[WintrChess] Tentative d'extraction PGN ${
-                attempts + 1
-              }/${maxAttempts}`
-            );
-            pgn = await getPgnFromSharePanel();
-
-            if (!pgn && attempts < maxAttempts - 1) {
-              // Attendre avant la prochaine tentative (temps d'attente croissant)
-              const waitTime =
-                1000 *
-                (attempts + 1) *
-                (STATE.isSlowDevice ? STATE.performanceFactor : 1);
-              console.log(`[WintrChess] Nouvelle tentative dans ${waitTime}ms`);
-              await new Promise((resolve) => setTimeout(resolve, waitTime));
-            }
-            attempts++;
-          } catch (err) {
-            console.error(
-              `[WintrChess] Erreur tentative ${attempts + 1}:`,
-              err
-            );
-            attempts++;
-            if (attempts < maxAttempts) {
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-            }
-          }
-        }
-
-        if (pgn) {
-          this._setCacheWithExpiry(cacheKey, pgn);
-          return pgn;
-        }
-        throw new Error(
-          "Impossible de récupérer le PGN depuis la page Chess.com"
-        );
-      } catch (error) {
-        console.error(
-          "[WintrChess] Erreur lors de l'extraction du PGN:",
-          error
-        );
-        NotificationManager.show(
-          "Erreur lors de l'extraction du PGN. Veuillez réessayer.",
-          5000
-        );
-        throw error;
-      }
-    },
-  });
-
-  // Gestionnaire de boutons
   const ButtonManager = (() => {
     const buttonCache = new Map();
     const targetCache = new Map();
-    const getRetryDelay = (attempts) => {
-      return Math.min(
+
+    const getRetryDelay = (attempts) =>
+      Math.min(
         CONFIG.RETRY_DELAY * Math.pow(1.5, attempts),
         CONFIG.LONG_RETRY_DELAY
       );
-    };
 
     return {
-      // Fonction d'ajout de bouton
       addButton({
         id = "default",
         buttonCreator,
         targets,
         attempts = 0,
-        retryFn = null,
+        retryFn,
         checkExisting = true,
       }) {
         const actualRetryFn =
           retryFn ||
-          ((newAttempts) => {
-            return this.addButton({
+          ((newAttempts) =>
+            this.addButton({
               id,
               buttonCreator,
               targets,
               attempts: newAttempts,
               retryFn,
               checkExisting,
-            });
-          });
+            }));
 
-        // Vérification rapide de l'existence du bouton
-        const buttonExists =
+        // Si le bouton spécifique à cet ID est déjà ajouté et dans le DOM, ne rien faire.
+        const existingInstance = STATE.buttonInstances.get(id);
+        if (
           checkExisting &&
-          STATE.buttonAdded &&
-          document.querySelector(".wintchess-button");
-
-        if (buttonExists) {
+          existingInstance &&
+          document.contains(existingInstance.button)
+        ) {
+          STATE.buttonAdded = true; // S'assurer que l'état global est correct
           return true;
         }
 
-        if (STATE.buttonAdded && !document.querySelector(".wintchess-button")) {
-          STATE.buttonAdded = false;
+        if (existingInstance && !document.contains(existingInstance.button)) {
+          STATE.buttonInstances.delete(id);
           buttonCache.delete(id);
         }
 
-        // Attendre que le DOM soit prêt avant d'insérer
         if (document.readyState !== "complete" && attempts < 5) {
-          setTimeout(() => actualRetryFn(attempts + 1), CONFIG.RETRY_DELAY);
+          setTimeout(() => actualRetryFn(attempts + 1), CONFIG.RETRY_DELAY / 2); // Essai plus rapide si doc pas prêt
           return false;
         }
 
-        // Création ou récupération du bouton depuis le cache
         let button = buttonCache.get(id);
-        if (!button) {
+        if (!button || !document.contains(button)) {
+          // Recréer si pas en cache ou plus dans le DOM
           button = buttonCreator();
           buttonCache.set(id, button);
         }
 
-        // Insertion du bouton
         if (this.insertButton(id, button, targets)) {
+          STATE.buttonAdded = true;
           return true;
         }
 
-        // Stratégie de réessai
         if (attempts < CONFIG.MAX_ATTEMPTS - 1) {
           setTimeout(
             () => actualRetryFn(attempts + 1),
             getRetryDelay(attempts)
           );
         } else {
-          // Réinitialiser les tentatives après une pause plus longue
-          setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY);
+          console.warn(
+            `[WintrChess] Max attempts reached for button ${id}. Resetting after long delay.`
+          );
+          setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY * 2); // Pause plus longue avant de reset
         }
-
         return false;
       },
 
       insertButton(id, button, targets) {
-        // Trier les sélecteurs par priorité (une seule fois par type de cible)
-        let sortedTargets = targetCache.get(targets);
+        let sortedTargets = targetCache.get(JSON.stringify(targets)); // Clé de cache basée sur les targets
         if (!sortedTargets) {
           sortedTargets = [...targets].sort(
             (a, b) => (b.priority || 0) - (a.priority || 0)
           );
-          targetCache.set(targets, sortedTargets);
+          targetCache.set(JSON.stringify(targets), sortedTargets);
         }
 
-        for (const { selector, method } of sortedTargets) {
-          try {
-            const elements =
-              selector instanceof Element
-                ? [selector]
-                : document.querySelectorAll(selector);
+        for (const targetConfig of sortedTargets) {
+          const { selector, method, element: predefinedElement } = targetConfig;
+          let elementToAttachTo = null;
 
-            if (!elements.length) continue;
-
-            const element = elements[0];
-
-            // Insérer le bouton selon la méthode appropriée
-            if (method === "append") {
-              element.appendChild(button);
-            } else if (method === "after" || method === "afterend") {
-              element.parentNode.insertBefore(button, element.nextSibling);
-            } else {
-              element.insertAdjacentElement(method, button);
+          if (predefinedElement && document.contains(predefinedElement)) {
+            elementToAttachTo = predefinedElement;
+          } else if (typeof selector === "string") {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+              elementToAttachTo = elements[0]; // Prendre le premier trouvé
             }
-
-            // Mettre à jour l'état global
-            STATE.buttonAdded = true;
-            STATE.buttonInstances.set(id, { button, element, method });
-
-            return true;
-          } catch (error) {
-            console.error("Erreur lors de l'insertion du bouton:", error);
           }
-        }
 
+          if (!elementToAttachTo) continue;
+
+          // Éviter d'ajouter si un bouton wintchess est déjà enfant direct ou frère direct
+          if (
+            method === "append" &&
+            elementToAttachTo.querySelector(
+              ":scope > .wintchess-button, :scope > .wintchess-button-container"
+            )
+          )
+            continue;
+          if (
+            (method === "after" || method === "afterend") &&
+            elementToAttachTo.nextElementSibling &&
+            (elementToAttachTo.nextElementSibling.classList.contains(
+              "wintchess-button"
+            ) ||
+              elementToAttachTo.nextElementSibling.classList.contains(
+                "wintchess-button-container"
+              ))
+          )
+            continue;
+
+          try {
+            if (method === "append") {
+              elementToAttachTo.appendChild(button);
+            } else if (method === "after" || method === "afterend") {
+              elementToAttachTo.parentNode.insertBefore(
+                button,
+                elementToAttachTo.nextSibling
+              );
+            } else {
+              // "beforebegin", "afterbegin"
+              elementToAttachTo.insertAdjacentElement(method, button);
+            }
+            STATE.buttonInstances.set(id, {
+              button,
+              element: elementToAttachTo,
+              method,
+            });
+            return true;
+          } catch (error) {}
+        }
         return false;
       },
 
       getTargets(platform = STATE.platform) {
         const cacheKey = `targets_${platform}`;
-        if (targetCache.has(cacheKey)) {
-          return targetCache.get(cacheKey);
+        if (targetCache.has(cacheKey)) return targetCache.get(cacheKey);
+
+        let baseSelectors = CONFIG.BUTTON_SELECTORS.SHARED;
+        if (platform === "lichess") {
+          baseSelectors = baseSelectors.concat(CONFIG.BUTTON_SELECTORS.LICHESS);
+        } else if (platform === "chess.com") {
+          baseSelectors = baseSelectors.concat(
+            CONFIG.BUTTON_SELECTORS.CHESS_COM
+          );
         }
 
-        let result;
+        let result = [];
         if (platform === "lichess") {
-          result = [
-            ...CONFIG.BUTTON_SELECTORS.SHARED,
-            ...CONFIG.BUTTON_SELECTORS.LICHESS,
-          ];
+          result = [...CONFIG.BUTTON_SELECTORS.LICHESS];
         } else if (platform === "chess.com") {
           result = [
             ...CONFIG.BUTTON_SELECTORS.SHARED,
             ...CONFIG.BUTTON_SELECTORS.CHESS_COM,
           ];
-        } else {
-          result = CONFIG.BUTTON_SELECTORS.SHARED;
         }
 
         targetCache.set(cacheKey, result);
         return result;
       },
 
-      // Suppression des boutons
+      removeButtonById(id) {
+        const instance = STATE.buttonInstances.get(id);
+        if (instance && instance.button && instance.button.parentNode) {
+          instance.button.parentNode.removeChild(instance.button);
+        }
+        STATE.buttonInstances.delete(id);
+        buttonCache.delete(id);
+        // Si c'est le dernier bouton, mettre à jour STATE.buttonAdded
+        if (STATE.buttonInstances.size === 0) {
+          STATE.buttonAdded = false;
+        }
+      },
+
       removeAllButtons() {
         STATE.buttonInstances.forEach(({ button }) => {
           if (button && button.parentNode) {
             button.parentNode.removeChild(button);
           }
         });
-
         STATE.buttonInstances.clear();
         buttonCache.clear();
         STATE.buttonAdded = false;
@@ -1084,175 +946,56 @@
   })();
 
   async function getPgnFromSharePanel() {
+    // Spécifique à Chess.com
     return new Promise((resolve, reject) => {
-      // Calculer les délais en fonction des performances de l'appareil
-      const getDelay = (baseDelay) => {
-        // Délai de base multiplié par le facteur de performance (min 1.5x sur PC lent)
-        return STATE.isSlowDevice
+      const getDelay = (baseDelay) =>
+        STATE.isSlowDevice
           ? baseDelay * Math.max(1.5, STATE.performanceFactor)
           : baseDelay;
-      };
 
-      // Fonction pour fermer le panneau de partage
       const closeSharePanel = () => {
         try {
-          const closeButton =
-            document.querySelector(
-              'button.cc-icon-button-component.cc-icon-button-large.cc-icon-button-ghost.cc-bg-ghost.cc-modal-header-close[aria-label="Fermer"]'
-            ) ||
-            document.querySelector(
-              '.share-menu-close, button[aria-label="Close"], button[aria-label="Fermer"]'
-            );
-
+          const closeButton = document.querySelector(
+            'button.cc-modal-header-close[aria-label="Fermer"], .share-menu-close, button[aria-label="Close"]'
+          );
           if (closeButton) closeButton.click();
         } catch (e) {
-          console.error(
-            "[WintrChess] Erreur lors de la fermeture du panneau:",
-            e
-          );
+          /* console.warn("[WintrChess] Erreur fermeture panneau:", e.message); */
         }
       };
 
-      // Fonction récursive pour tenter d'ouvrir le panneau de partage
-      const tryOpenSharePanel = (attempts = 0) => {
-        const maxAttempts = 5;
-        if (attempts >= maxAttempts) {
-          console.error(
-            `[WintrChess] Échec de l'ouverture du panneau de partage après ${maxAttempts} tentatives`
-          );
-          return reject("Échec de l'ouverture du panneau de partage");
-        }
-
-        console.log(
-          `[WintrChess] Tentative ${
-            attempts + 1
-          }/${maxAttempts} d'ouverture du panneau de partage`
-        );
-
-        // Chercher tous les boutons de partage possibles
-        const shareButtons = document.querySelectorAll(
-          'button[aria-label="Share"], .icon-font-chess.share, [data-cy="share-button"]'
-        );
-
-        // Si PC lent, ajouter des sélecteurs plus génériques pour trouver le bouton de partage
-        if (STATE.isSlowDevice) {
-          const allButtons = Array.from(document.querySelectorAll("button"));
-          const shareTextButtons = allButtons.filter((btn) => {
-            const text = btn.textContent?.toLowerCase() || "";
-            return text.includes("share") || text.includes("partage");
-          });
-
-          shareButtons.push(...shareTextButtons);
-        }
-
-        let shareClicked = false;
-        for (const btn of shareButtons) {
-          try {
-            btn.click();
-            shareClicked = true;
-            break;
-          } catch (e) {}
-        }
-
-        if (!shareClicked) {
-          console.log(
-            `[WintrChess] Bouton de partage non trouvé, nouvelle tentative dans ${getDelay(
-              500
-            )}ms`
-          );
-          setTimeout(() => tryOpenSharePanel(attempts + 1), getDelay(500));
-          return;
-        }
-
-        // Attendre que le panneau apparaisse puis passer à l'étape suivante
-        setTimeout(() => tryClickPgnTab(), getDelay(800));
-      };
-
-      // Fonction récursive pour cliquer sur l'onglet PGN
-      const tryClickPgnTab = (attempts = 0) => {
-        const maxAttempts = 5;
-        if (attempts >= maxAttempts) {
-          closeSharePanel();
-          console.error(
-            `[WintrChess] Onglet PGN non trouvé après ${maxAttempts} tentatives`
-          );
-          return reject("Onglet PGN non trouvé");
-        }
-
-        console.log(
-          `[WintrChess] Tentative ${
-            attempts + 1
-          }/${maxAttempts} de cliquer sur l'onglet PGN`
-        );
-
-        // Recherche plus large de l'onglet PGN
-        const pgnSelectors = [
-          'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
-          'button.cc-tab-item-component[aria-controls="tabpanel-pgn"]',
-          'button.cc-tab-item-component:not([aria-selected="true"])',
-          'button[id*="pgn"]',
-          'button[aria-controls*="pgn"]',
-        ];
-
-        // Essayer tous les sélecteurs jusqu'à trouver un élément
-        let pgnButton = null;
-        for (const selector of pgnSelectors) {
-          const el = document.querySelector(selector);
-          if (el) {
-            pgnButton = el;
-            break;
+      const clickElementWithRetry = async (
+        selectors,
+        description,
+        maxAttempts = 5,
+        attemptDelay = 500
+      ) => {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          for (const selector of selectors) {
+            const element =
+              typeof selector === "string"
+                ? document.querySelector(selector)
+                : selector.findFn
+                ? selector.findFn()
+                : null;
+            if (element) {
+              try {
+                element.click();
+                return true;
+              } catch (e) {}
+            }
+          }
+          if (attempt < maxAttempts - 1) {
+            await Utils.sleep(getDelay(attemptDelay));
           }
         }
-
-        // Si aucun sélecteur ne fonctionne, chercher des boutons avec le texte "PGN"
-        if (!pgnButton) {
-          const allButtons = Array.from(document.querySelectorAll("button"));
-          pgnButton = allButtons.find((btn) => {
-            return btn.textContent?.includes("PGN");
-          });
-        }
-
-        if (!pgnButton) {
-          console.log(
-            `[WintrChess] Onglet PGN non trouvé, nouvelle tentative dans ${getDelay(
-              500
-            )}ms`
-          );
-          setTimeout(() => tryClickPgnTab(attempts + 1), getDelay(500));
-          return;
-        }
-
-        try {
-          pgnButton.click();
-          // Attendre que le contenu PGN apparaisse
-          setTimeout(() => tryExtractPgn(), getDelay(1000));
-        } catch (e) {
-          console.error(
-            "[WintrChess] Erreur lors du clic sur l'onglet PGN:",
-            e
-          );
-          setTimeout(() => tryClickPgnTab(attempts + 1), getDelay(500));
-        }
+        console.error(
+          `[WintrChess] Échec: ${description} non trouvé/cliquable après ${maxAttempts} tentatives.`
+        );
+        return false;
       };
 
-      // Fonction récursive pour extraire le PGN
-      const tryExtractPgn = (attempts = 0) => {
-        const maxAttempts = 5;
-        if (attempts >= maxAttempts) {
-          closeSharePanel();
-          console.error(
-            `[WintrChess] Échec de l'extraction du PGN après ${maxAttempts} tentatives`
-          );
-          return reject("Échec de l'extraction du PGN");
-        }
-
-        console.log(
-          `[WintrChess] Tentative ${
-            attempts + 1
-          }/${maxAttempts} d'extraction du PGN`
-        );
-
-        // Recherche élargie pour le textarea
+      const extractPgnValue = async (maxAttempts = 5, attemptDelay = 500) => {
         const textareaSelectors = [
           'textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]',
           'textarea[aria-label="PGN"]',
@@ -1260,268 +1003,302 @@
           "textarea.cc-textarea-component",
           "textarea",
         ];
-
-        // Essayer tous les sélecteurs jusqu'à trouver un élément
-        let textarea = null;
-        for (const selector of textareaSelectors) {
-          const el = document.querySelector(selector);
-          if (el) {
-            textarea = el;
-            break;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          for (const selector of textareaSelectors) {
+            const textarea = document.querySelector(selector);
+            if (
+              textarea &&
+              textarea.value &&
+              textarea.value.includes("[Event")
+            ) {
+              return textarea.value;
+            }
+          }
+          if (attempt < maxAttempts - 1) {
+            await Utils.sleep(getDelay(attemptDelay));
           }
         }
-
-        if (!textarea) {
-          console.log(
-            `[WintrChess] Textarea PGN non trouvé, nouvelle tentative dans ${getDelay(
-              500
-            )}ms`
-          );
-          setTimeout(() => tryExtractPgn(attempts + 1), getDelay(500));
-          return;
-        }
-
-        try {
-          const pgn = textarea.value || null;
-
-          if (pgn && pgn.includes("[Event")) {
-            closeSharePanel();
-            resolve(pgn);
-          } else {
-            console.log(
-              `[WintrChess] PGN invalide, nouvelle tentative dans ${getDelay(
-                500
-              )}ms`
-            );
-            setTimeout(() => tryExtractPgn(attempts + 1), getDelay(500));
-          }
-        } catch (error) {
-          console.error(
-            "[WintrChess] Erreur lors de l'extraction du PGN:",
-            error
-          );
-          setTimeout(() => tryExtractPgn(attempts + 1), getDelay(500));
-        }
+        return null;
       };
 
-      // Commencer le processus
+      (async () => {
+        let shareButtonSelectors = [
+          'button[aria-label="Share"]',
+          ".icon-font-chess.share",
+          '[data-cy="share-button"]',
+        ];
+        if (STATE.isSlowDevice) {
+          // Sélecteurs plus génériques pour appareils lents
+          shareButtonSelectors.push({
+            findFn: () =>
+              Array.from(document.querySelectorAll("button")).find((btn) => {
+                const text = btn.textContent?.toLowerCase() || "";
+                return text.includes("share") || text.includes("partage");
+              }),
+          });
+        }
+
+        if (
+          !(await clickElementWithRetry(
+            shareButtonSelectors,
+            "bouton de partage",
+            5
+          ))
+        ) {
+          return reject("Échec de l'ouverture du panneau de partage");
+        }
+        await Utils.sleep(getDelay(300)); // Attente pour l'apparition du panneau
+
+        const pgnTabSelectors = [
+          'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
+          'button.cc-tab-item-component[aria-controls="tabpanel-pgn"]',
+          // 'button.cc-tab-item-component:not([aria-selected="true"])', // Trop générique, peut cliquer sur autre chose
+          'button[id*="pgn"]',
+          'button[aria-controls*="pgn"]',
+          {
+            findFn: () =>
+              Array.from(
+                document.querySelectorAll(
+                  ".share-menu-tab button, .cc-tabs-component button"
+                )
+              ).find((btn) => btn.textContent?.toUpperCase().includes("PGN")),
+          },
+        ];
+        if (
+          !(await clickElementWithRetry(
+            pgnTabSelectors,
+            "onglet PGN",
+            5,
+            getDelay(500)
+          ))
+        ) {
+          closeSharePanel();
+          return reject("Onglet PGN non trouvé");
+        }
+        await Utils.sleep(getDelay(1000)); // Attente pour le chargement du PGN
+
+        const pgn = await extractPgnValue(5, getDelay(500));
+        closeSharePanel();
+        if (pgn) {
+          resolve(pgn);
+        } else {
+          reject("Échec de l'extraction du PGN depuis le textarea");
+        }
+      })().catch((err) => {
+        closeSharePanel(); // S'assurer que le panneau est fermé en cas d'erreur
+        reject(err);
+      });
+
       if (STATE.isSlowDevice) {
         NotificationManager.show(
-          "Extraction du PGN sur un appareil lent, veuillez patienter...",
+          "Extraction PGN (appareil lent), veuillez patienter...",
           5000
         );
       }
-      tryOpenSharePanel();
     });
   }
 
   function findGameReviewButton() {
-    // Sélecteurs pour le bouton "Bilan de la partie"
-    const bilanSelectors = [
-      "button.cc-button-component.cc-button-primary.cc-button-xx-large.cc-bg-primary:not(.wintchess-button)",
-      "button.cc-button-component.cc-button-primary:not(.wintchess-button)",
-      "button.cc-button-component:not(.wintchess-button)",
-      "button.cc-button-xx-large:not(.wintchess-button)",
-      ".post-game-button button:not(.wintchess-button)",
-      ".review-button button:not(.wintchess-button)",
-      ".game-review-button button:not(.wintchess-button)",
+    // Spécifique à Chess.com
+    const reviewTerms = CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.map((term) =>
+      term.toLowerCase()
+    );
+    // Sélecteurs spécifiques pour le bouton "Bilan", du plus précis au plus générique
+    const selectors = [
+      "button.game-over-review-button-component", // Modale de fin de partie
+      ".game-over-buttons-component .button-with-icon-primary", // Autre cas de modale
+      ".sidebar-buttons-container button.ui_v5-button-component.primary", // Barre latérale
+      ".board-layout-sidebar .review-button-component button",
+      ".layout-sidebar .review-button-component button", // Nouvelle interface
+      // Sélecteurs plus génériques si les précédents échouent
+      "button.cc-button-component.cc-button-primary.cc-button-xx-large.cc-bg-primary",
+      "button.cc-button-component.cc-button-primary",
     ];
 
-    // Essayer de trouver un bouton qui contient un des termes
-    const allButtons = document.querySelectorAll(bilanSelectors.join(", "));
-    for (const btn of allButtons) {
-      const btnText = btn.textContent.toLowerCase();
-      if (
-        CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.some((term) =>
-          btnText.includes(term)
-        )
-      ) {
-        return btn;
+    for (const selector of selectors) {
+      const buttons = document.querySelectorAll(
+        selector + ":not(.wintchess-button)"
+      ); // Exclure notre propre bouton
+      for (const btn of buttons) {
+        const btnText = btn.textContent?.toLowerCase() || "";
+        const ariaLabel = btn.getAttribute("aria-label")?.toLowerCase() || "";
+        if (
+          reviewTerms.some(
+            (term) => btnText.includes(term) || ariaLabel.includes(term)
+          )
+        ) {
+          // Vérifier qu'il ne s'agit pas d'un bouton "Nouvelle partie" ou similaire
+          if (
+            !btnText.includes("new game") &&
+            !btnText.includes("nouvelle partie")
+          ) {
+            return btn;
+          }
+        }
       }
     }
-
-    const similarButtons = document.querySelectorAll(
-      "button.cc-button-component.cc-button-xx-large:not(.wintchess-button)"
+    // Fallback: prendre un bouton proéminent s'il correspond à un "bouton d'action principal"
+    const prominentButton = document.querySelector(
+      "button.cc-button-component.cc-button-xx-large:not(.wintchess-button), .post-game-buttons-component button:first-of-type:not(.wintchess-button)"
     );
-    return similarButtons.length > 0 ? similarButtons[0] : null;
+    if (
+      prominentButton &&
+      reviewTerms.some((term) =>
+        prominentButton.textContent?.toLowerCase().includes(term)
+      )
+    ) {
+      return prominentButton;
+    }
+    return null;
   }
 
   // ===== WINTRCHESS FUNCTIONS =====
-
   function initWintrChess() {
-    // Si l'appareil est lent, afficher une notification pour la patience
     if (STATE.isSlowDevice) {
       NotificationManager.show(
-        "Appareil lent détecté, préparation de l'analyse...",
+        "Préparation de l'analyse (appareil lent)...",
         5000
       );
     }
-    pasteAndAnalyze();
+    pasteAndAnalyzeWintrChess();
   }
 
-  // Fonction de collage et analyse sur WintrChess
-  async function pasteAndAnalyze() {
+  async function pasteAndAnalyzeWintrChess() {
     const pgnToPaste = await chromeStorage.getValue(
       CONFIG.PGN_STORAGE_KEY,
       null
     );
     if (!pgnToPaste) return;
 
-    const selectors = [
-      // Sélecteurs par classe spécifique (priorité la plus haute)
+    const selectorsConfig = [
       {
         textarea: "textarea.TerVPsT9aZ0soO8yjZU4",
         button: "button.rHBNQrpvd7mwKp3HqjVQ.THArhyJIfuOy42flULV6",
         priority: 3,
       },
-      // Sélecteurs par attribut (priorité moyenne)
       {
         textarea: 'textarea[placeholder*="PGN"]',
-        button: "", // Sera trouvé par findButtonByText
+        buttonText: ["Analyser", "Analyze", "Analyze game"],
         priority: 2,
       },
-      // Sélecteurs génériques (priorité basse)
       {
         textarea: "textarea",
-        button: "",
+        buttonText: ["Analyser", "Analyze", "Analyze game"],
         priority: 1,
       },
-    ];
+    ].sort((a, b) => b.priority - a.priority); // Trier par priorité
 
-    // Utilisation d'un limit rate pour ne pas surcharger l'interface
-    const maxAttempts = 30;
-    const initialDelay = 300;
     let attempts = 0;
-    let delayMs = initialDelay;
+    const maxAttempts = 30;
+    let delayMs = STATE.isSlowDevice ? 500 : 300;
 
     const findElements = () => {
-      for (const sel of selectors) {
+      for (const sel of selectorsConfig) {
         const textarea = document.querySelector(sel.textarea);
-
         if (!textarea) continue;
-
-        // Si un textarea est trouvé, chercher le bouton
         const button = sel.button
           ? document.querySelector(sel.button)
-          : findButtonByText(["Analyser", "Analyze", "Analyze game"]);
-
-        if (button) {
-          return { textarea, button };
-        }
+          : sel.buttonText
+          ? findWintrChessButtonByText(sel.buttonText)
+          : null;
+        if (button) return { textarea, button };
       }
-
       return null;
     };
 
-    // Fonction de collage du PGN
-    const pastePgn = async (textarea, button) => {
+    const performPaste = async (textarea, button) => {
       try {
-        // 1. Focus et sélection du contenu existant
         textarea.focus();
         textarea.select();
         await Utils.sleep(100);
 
-        // 2. Injection optimisée du PGN en utilisant le setter natif
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLTextAreaElement.prototype,
-          "value"
-        ).set;
+        // Utiliser l'affectation directe de valeur et les événements semble plus robuste
+        textarea.value = pgnToPaste;
+        textarea.dispatchEvent(
+          new Event("input", { bubbles: true, cancelable: true })
+        );
+        textarea.dispatchEvent(
+          new Event("change", { bubbles: true, cancelable: true })
+        );
+        await Utils.sleep(STATE.isSlowDevice ? 600 : 300); // Délai plus long si appareil lent
 
-        nativeInputValueSetter.call(textarea, pgnToPaste);
-
-        // 3. Déclencher les événements nécessaires pour activer le bouton
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
-        textarea.dispatchEvent(new Event("change", { bubbles: true }));
-        await Utils.sleep(300);
-
-        // 4. Cliquer sur le bouton d'analyse
         if (!button.disabled) {
           button.click();
-
-          // 5. Nettoyer le stockage après succès
           await chromeStorage.deleteValue(CONFIG.PGN_STORAGE_KEY);
           return true;
         }
-
         return false;
       } catch (error) {
-        console.error("Erreur lors du collage automatique:", error);
+        console.error(
+          "[WintrChess] Erreur lors du collage auto sur WintrChess:",
+          error
+        );
         return false;
       }
     };
 
-    // Fonction récursive avec backoff exponentiel
-    const attemptPaste = async () => {
-      // 1. Observer si la page est visible
+    const attemptPasteRecursive = async () => {
       if (document.visibilityState === "hidden") {
-        document.addEventListener(
-          "visibilitychange",
-          function checkVisibility() {
-            if (document.visibilityState === "visible") {
-              document.removeEventListener("visibilitychange", checkVisibility);
-              setTimeout(attemptPaste, 500);
-            }
+        const onVisible = () => {
+          if (document.visibilityState === "visible") {
+            document.removeEventListener("visibilitychange", onVisible);
+            setTimeout(attemptPasteRecursive, 500);
           }
-        );
+        };
+        document.addEventListener("visibilitychange", onVisible);
         return;
       }
 
-      // 2. Tentative de trouver les éléments nécessaires
       const elements = findElements();
-
-      if (elements) {
-        const success = await pastePgn(elements.textarea, elements.button);
-
-        if (success) {
-          return;
-        }
+      if (
+        elements &&
+        (await performPaste(elements.textarea, elements.button))
+      ) {
+        return; // Succès
       }
 
-      // 3. Échec ou éléments non trouvés, réessayer?
       attempts++;
-
       if (attempts >= maxAttempts) {
         console.warn(
-          `Impossible de coller le PGN après ${maxAttempts} tentatives.`
+          `[WintrChess] Impossible de coller le PGN sur WintrChess après ${maxAttempts} tentatives.`
         );
         NotificationManager.show(
-          "Impossible de coller automatiquement le PGN. Veuillez copier-coller manuellement."
+          "Collage auto échoué. Veuillez coller le PGN manuellement.",
+          5000
         );
+        // Optionnel: copier le PGN dans le presse-papier pour l'utilisateur
+        // if (navigator.clipboard && pgnToPaste) {
+        //    await navigator.clipboard.writeText(pgnToPaste);
+        //    NotificationManager.show("PGN copié dans le presse-papiers.", 3000);
+        // }
         return;
       }
 
-      // Backoff exponentiel pour éviter de surcharger
-      delayMs = Math.min(delayMs * 1.5, CONFIG.LONG_RETRY_DELAY);
-      setTimeout(attemptPaste, delayMs);
+      delayMs = Math.min(delayMs * 1.2, CONFIG.LONG_RETRY_DELAY); // Augmentation plus douce
+      setTimeout(attemptPasteRecursive, delayMs);
     };
 
-    // Démarrer le processus après un court délai pour laisser la page se charger
-    setTimeout(attemptPaste, 500);
+    setTimeout(attemptPasteRecursive, STATE.isSlowDevice ? 800 : 500); // Délai initial
   }
 
-  // Fonction pour trouver un bouton par son texte
-  function findButtonByText(textOptions) {
+  function findWintrChessButtonByText(textOptions) {
+    // Renommé pour clarté
     const allButtons = Array.from(
       document.querySelectorAll("button:not([disabled])")
     );
-
     for (const text of textOptions) {
       const textLower = text.toLowerCase();
-      for (const button of allButtons) {
-        if (button.textContent.toLowerCase().includes(textLower)) {
-          return button;
-        }
-      }
+      const foundButton = allButtons.find((button) =>
+        button.textContent?.toLowerCase().includes(textLower)
+      );
+      if (foundButton) return foundButton;
     }
     return null;
   }
 
   const Utils = {
-    sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    },
-
-    debounce(fn, delay) {
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    debounce: (fn, delay) => {
       let timer = null;
       return function (...args) {
         clearTimeout(timer);
@@ -1531,5 +1308,9 @@
   };
 
   // ===== BOOTSTRAP =====
-  init();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
