@@ -94,7 +94,6 @@
     return duration;
   }
 
-  // Remplacements pour les fonctions TamperMonkey
   const chromeStorage = {
     setValue: (key, value) => {
       return new Promise((resolve) => {
@@ -134,14 +133,17 @@
     const pageInfo = getLichessPageInfo();
 
     if (pageInfo.isRelevantPage) {
-      STATE.platform = "lichess";
+      const lichessPlatform = "lichess";
 
-      DomObserverManager.setupObserver(tryAddButton, "lichess");
+      DomObserverManager.setupObserver(
+        () => tryAddButton(lichessPlatform),
+        lichessPlatform
+      );
 
-      tryAddButton();
+      tryAddButton(lichessPlatform);
 
       const loadHandler = Utils.debounce(
-        () => tryAddButton(),
+        () => tryAddButton(lichessPlatform),
         CONFIG.RETRY_DELAY
       );
       window.addEventListener("load", loadHandler);
@@ -156,16 +158,19 @@
           return;
         }
 
+        // Vérifier si le bouton existe toujours
         if (
           !STATE.buttonAdded ||
           !document.querySelector(".wintchess-button")
         ) {
-          tryAddButton();
+          tryAddButton(lichessPlatform);
         }
       }, CONFIG.BUTTON_CHECK_INTERVAL);
 
+      // Nettoyage lors de la fermeture de la page
       window.addEventListener("beforeunload", () => {
         clearInterval(periodicCheck);
+        DomObserverManager.disconnectExisting();
       });
     }
   }
@@ -201,13 +206,7 @@
   const DomObserverManager = {
     // Tableau des éléments considérés comme pertinents par plateforme
     relevantClassesByPlatform: {
-      lichess: [
-        "analyse__tools",
-        "study__tools",
-        "analyse__underboard",
-        "puzzle__tools",
-        "game-over-modal-content",
-      ],
+      lichess: ["analyse__tools"],
       "chess.com": [
         "board-controls",
         "game-controls",
@@ -218,38 +217,105 @@
     },
 
     relevantSelectors: null,
+    relevantNodeNames: new Set(["chess-board"]),
 
     setupObserver(callback, platform = STATE.platform) {
       this.disconnectExisting();
 
+      // Configuration des sélecteurs pertinents pour la plateforme
       this.relevantSelectors = new Set(
         this.relevantClassesByPlatform[platform] || []
       );
 
-      const optimizedCallback = Utils.debounce((mutationsList) => {
-        // Éviter de traiter si un bouton existe déjà
-        if (document.querySelector(".wintchess-button")) return;
-
-        const hasRelevantChanges = mutationsList.some(
-          (mutation) =>
-            (mutation.type === "childList" && mutation.addedNodes.length > 0) ||
-            (mutation.type === "attributes" &&
-              this.isRelevantElement(mutation.target, platform))
-        );
-
-        if (hasRelevantChanges) {
-          callback();
-        }
-      }, CONFIG.DEBOUNCE_DELAY);
-
-      STATE.observer = new MutationObserver(optimizedCallback);
-
-      STATE.observer.observe(document.body, {
+      // Définition de la configuration de l'observateur en fonction de la plateforme
+      const observerConfig = {
         childList: true,
         subtree: true,
-        attributes: true,
-        attributeFilter: ["class"], // Ne surveiller que les changements de classe
-      });
+        attributes:
+          platform === "lichess" // Ajouter les attributs uniquement pour Lichess
+            ? {
+                attributes: true,
+                attributeFilter: ["class"],
+              }
+            : {},
+      };
+
+      let processedCallback;
+
+      if (platform === "chess.com") {
+        processedCallback = (mutations) => {
+          let shouldCallback = false;
+          let gameOverModalDetected = false;
+
+          for (const mutation of mutations) {
+            if (mutation.addedNodes.length) {
+              for (const node of mutation.addedNodes) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                  const elem = node;
+
+                  if (
+                    elem.classList &&
+                    elem.classList.contains("game-over-modal-content")
+                  ) {
+                    gameOverModalDetected = true;
+                    setTimeout(() => {
+                      tryAddButtonToGameOverModal();
+                    }, 300);
+                  }
+
+                  if (elem.classList) {
+                    for (const cls of this.relevantSelectors) {
+                      if (elem.classList.contains(cls)) {
+                        shouldCallback = true;
+                        break;
+                      }
+                    }
+
+                    // Vérifier le nom du nœud
+                    if (
+                      this.relevantNodeNames.has(elem.nodeName.toLowerCase())
+                    ) {
+                      shouldCallback = true;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if (shouldCallback && !gameOverModalDetected) {
+            callback();
+          }
+        };
+      } else {
+        // Callback générique pour Lichess
+        processedCallback = Utils.debounce((mutationsList) => {
+          // Éviter de traiter si un bouton existe déjà
+          if (document.querySelector(".wintchess-button")) return;
+
+          const hasRelevantChanges = mutationsList.some(
+            (mutation) =>
+              (mutation.type === "childList" &&
+                mutation.addedNodes.length > 0) ||
+              (mutation.type === "attributes" &&
+                this.isRelevantElement(mutation.target, platform))
+          );
+
+          if (hasRelevantChanges) {
+            callback();
+          }
+        }, CONFIG.DEBOUNCE_DELAY);
+      }
+
+      // Création et démarrage de l'observateur
+      STATE.observer = new MutationObserver(processedCallback);
+
+      // Observer le document entier pour Chess.com, seulement le body pour Lichess
+      const targetNode =
+        platform === "chess.com" ? document.documentElement : document.body;
+
+      STATE.observer.observe(targetNode, observerConfig);
+
+      return STATE.observer;
     },
 
     disconnectExisting() {
@@ -262,10 +328,16 @@
     isRelevantElement(element, platform) {
       if (!element || !element.classList) return false;
 
-      for (const cls of element.classList) {
-        if (this.relevantSelectors.has(cls)) {
+      // Vérifier les classes pertinentes
+      for (const className of this.relevantSelectors) {
+        if (element.classList.contains(className)) {
           return true;
         }
+      }
+
+      // Vérifier les noms de nœuds pertinents
+      if (this.relevantNodeNames.has(element.nodeName.toLowerCase())) {
+        return true;
       }
 
       return false;
@@ -274,7 +346,7 @@
 
   const PgnExtractor = {
     _cache: new Map(),
-    _cacheDuration: 60000, // Durée de validité du cache
+    _cacheDuration: 60000,
 
     // Efface une entrée du cache après un certain temps
     _setCacheWithExpiry(key, value) {
@@ -287,7 +359,6 @@
 
       this._cache.set(key, cacheItem);
 
-      // Planifier la suppression du cache
       setTimeout(() => {
         if (this._cache.has(key)) {
           this._cache.delete(key);
@@ -317,7 +388,7 @@
 
       if (!pageInfo.gameId) {
         console.log(
-          "Impossible de récupérer le PGN: pas d'identifiant de partie détecté"
+          "[WintrChess] Impossible de récupérer le PGN: pas d'identifiant de partie détecté"
         );
         return null;
       }
@@ -326,7 +397,7 @@
       const cacheKey = `lichess_${pageInfo.gameId}`;
       const cachedPgn = this._getFromCache(cacheKey);
       if (cachedPgn) {
-        console.log("PGN récupéré depuis le cache");
+        console.log("[WintrChess] PGN récupéré depuis le cache pour Lichess");
         return cachedPgn;
       }
 
@@ -334,10 +405,14 @@
         const pgn = await fetchPgnFromApi(pageInfo.gameId);
         if (pgn) {
           this._setCacheWithExpiry(cacheKey, pgn);
+          console.log("[WintrChess] PGN pour Lichess mis en cache");
         }
         return pgn;
       } catch (error) {
-        console.error("Erreur lors de la récupération du PGN via API:", error);
+        console.error(
+          "[WintrChess] Erreur lors de la récupération du PGN via API Lichess:",
+          error
+        );
         return null;
       }
     },
@@ -410,9 +485,9 @@
     },
   };
 
-  // Création de bouton Lichess
-  function createLichessButton() {
-    return ButtonFactory.create({
+  // Configuration des styles et classes pour les boutons par type
+  const BUTTON_CONFIGS = {
+    lichess: {
       className: "button button-metal",
       style: `
       display: block;
@@ -421,15 +496,8 @@
       padding: 5px 10px;
     `,
       innerHTML: `<span class="button-text">${CONFIG.BUTTON_TEXT}</span>`,
-      onClick: () => {
-        return PgnExtractor.fromLichess();
-      },
-    });
-  }
-
-  // Création de bouton Chess.com
-  function createChessComButton() {
-    return ButtonFactory.create({
+    },
+    chesscom: {
       className:
         "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
       style: `
@@ -443,23 +511,14 @@
       </span>
       <span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>
     `,
-      onClick: () => {
-        return PgnExtractor.fromChessCom();
-      },
-    });
-  }
-
-  // Fonction pour créer un bouton pour la fenêtre modale de fin de partie
-  function createGameOverWintrButton() {
-    return ButtonFactory.create({
+    },
+    gameOver: {
       className:
         "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
       style: `
         width: 100%;
-        margin-top: 5px;
-        min-height: 48px;
-        white-space: normal;
-        padding: 8px 16px;
+        margin-top: 3px;
+        margin-bottom: 6px;
       `,
       innerHTML: `
         <span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">
@@ -467,60 +526,124 @@
         </span>
         <span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${CONFIG.BUTTON_TEXT}</span>
       `,
+    },
+  };
+
+  function createButton(type = STATE.platform) {
+    const config =
+      type === "gameOver"
+        ? BUTTON_CONFIGS.gameOver
+        : BUTTON_CONFIGS[type] || BUTTON_CONFIGS.lichess;
+
+    return ButtonFactory.create({
+      className: config.className,
+      style: config.style,
+      innerHTML: config.innerHTML,
       onClick: () => {
-        return PgnExtractor.fromChessCom();
+        const platform = STATE.platform || type.split("_")[0];
+        return platform === "chess.com" ||
+          type.includes("chess.com") ||
+          type === "gameOver"
+          ? PgnExtractor.fromChessCom()
+          : PgnExtractor.fromLichess();
       },
     });
   }
 
   // Tente d'ajouter le bouton à la fenêtre modale de fin de partie
   function tryAddButtonToGameOverModal() {
-    const gameOverModal = document.querySelector(".game-over-modal-content");
-    if (!gameOverModal) return false;
-    if (gameOverModal.querySelector(".wintchess-button-container")) return true;
-    const gameOverButtons = gameOverModal.querySelector(
-      ".game-over-modal-buttons"
-    );
+    const modalContent = document.querySelector(".game-over-modal-content");
 
-    if (!gameOverButtons) {
-      console.log("WintrChess: .game-over-modal-buttons non trouvé");
+    if (!modalContent) {
       return false;
     }
 
-    const reviewButtonContainer = gameOverButtons.querySelector(
-      ".game-over-review-button-component"
-    );
+    // Vérifier si le bouton existe déjà pour éviter les doublons
+    const existingButton = modalContent.querySelector(".wintchess-button");
+    if (existingButton) {
+      return true;
+    }
 
-    if (!reviewButtonContainer) {
-      console.log("WintrChess: .game-over-review-button-component non trouvé");
+    // Trouver la liste de boutons et la zone où ajouter notre bouton
+    const buttonList = modalContent.querySelector(".game-over-modal-buttons");
+    if (!buttonList) {
       return false;
     }
 
-    // Créer une copie du conteneur du bouton bilan pour notre bouton
-    const wintrButtonContainer = document.createElement("div");
-    wintrButtonContainer.className =
-      "game-over-review-button-component wintchess-button-container";
-    wintrButtonContainer.style.cssText = `
-      margin-bottom: 10px;
-      padding-bottom: 10px;
-    `;
+    try {
+      // Chercher directement le conteneur du bouton "Bilan"
+      const bilanContainer = buttonList.querySelector(
+        ".game-over-review-button-component"
+      );
 
-    const wintrButton = createGameOverWintrButton();
-    wintrButton.classList.add("game-over-review-button-background");
-    wintrButton.classList.add("wintchess-button");
-    wintrButtonContainer.appendChild(wintrButton);
+      // Créer notre bouton WintrChess
+      const button = createButton("gameOver");
+      const buttonContainer = document.createElement("div");
+      buttonContainer.className =
+        "wintchess-button-container game-over-review-button-component";
+      buttonContainer.appendChild(button);
 
-    // Insérer notre bouton juste après le bouton "Bilan de la partie"
-    gameOverButtons.insertBefore(
-      wintrButtonContainer,
-      reviewButtonContainer.nextSibling
-    );
+      if (bilanContainer) {
+        // Insérer juste après le conteneur du bouton bilan
+        if (bilanContainer.parentElement) {
+          bilanContainer.parentElement.insertBefore(
+            buttonContainer,
+            bilanContainer.nextSibling
+          );
+        } else {
+          // Cas improbable: le conteneur n'a pas de parent
+          buttonList.appendChild(buttonContainer);
+        }
+      } else {
+        // Si on ne trouve pas le conteneur du bouton bilan, essayer de trouver le texte
+        const bilanLabel = Array.from(
+          buttonList.querySelectorAll(".game-over-review-button-label, span")
+        ).find((span) => {
+          const text = span.textContent.toLowerCase();
+          return CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.some((term) =>
+            text.includes(term)
+          );
+        });
 
-    STATE.buttonAdded = true;
-    return true;
+        if (bilanLabel) {
+          // Remonter jusqu'au conteneur parent
+          const parentContainer =
+            bilanLabel.closest("div") || bilanLabel.parentElement;
+          if (parentContainer && parentContainer.parentElement) {
+            parentContainer.parentElement.insertBefore(
+              buttonContainer,
+              parentContainer.nextSibling
+            );
+          } else {
+            buttonList.appendChild(buttonContainer);
+          }
+        } else {
+          // Si toujours pas trouvé, ajouter au début de la liste
+          const firstChild = buttonList.firstChild;
+          if (firstChild) {
+            buttonList.insertBefore(buttonContainer, firstChild);
+          } else {
+            buttonList.appendChild(buttonContainer);
+          }
+        }
+      }
+
+      // Stocker l'instance de bouton pour pouvoir le nettoyer plus tard
+      STATE.buttonInstances.set("gameOverModal", {
+        button: buttonContainer,
+        element: buttonList,
+        method: "insertBefore",
+      });
+
+      STATE.buttonAdded = true;
+      return true;
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du bouton à la modale:", error);
+      return false;
+    }
   }
 
-  // Gestionnaire de notifications optimisé
+  // Gestionnaire de notifications
   const NotificationManager = (() => {
     let activeNotification = null;
     let timerId = null;
@@ -575,17 +698,46 @@
     };
   })();
 
-  function tryAddButton(attempts = 0) {
-    // Définir la plateforme
-    STATE.platform = "lichess";
+  function tryAddButton(platform = "lichess", attempts = 0) {
+    STATE.platform = platform;
 
-    return ButtonManager.addButton({
-      id: "lichess_main",
-      buttonCreator: createLichessButton,
-      targets: ButtonManager.getTargets("lichess"),
+    if (platform === "chess.com") {
+      const pageInfo = getChessComPageInfo();
+      if (pageInfo.isReviewPage) {
+        return false;
+      }
+
+      // Vérifier si nous sommes dans la modale de fin de partie (priorité la plus haute)
+      if (tryAddButtonToGameOverModal()) {
+        return true;
+      }
+
+      // Chercher d'abord le bouton 'Bilan de la partie' pour Chess.com
+      let bilanButton = findGameReviewButton();
+      if (bilanButton && bilanButton.parentNode) {
+        return ButtonManager.addButton({
+          id: "chesscom_after_bilan",
+          buttonCreator: () => createButton("chesscom"),
+          targets: [
+            { selector: bilanButton, method: "afterend", priority: 20 },
+          ],
+          attempts,
+          retryFn: (newAttempts) => tryAddButton(platform, newAttempts),
+        });
+      }
+    }
+
+    // Configuration commune pour toutes les plateformes
+    const config = {
+      id: platform === "chess.com" ? "chesscom_main" : "lichess_main",
+      buttonCreator: () =>
+        createButton(platform === "chess.com" ? "chesscom" : "lichess"),
+      targets: ButtonManager.getTargets(platform),
       attempts,
-      retryFn: tryAddButton,
-    });
+      retryFn: (newAttempts) => tryAddButton(platform, newAttempts),
+    };
+
+    return ButtonManager.addButton(config);
   }
 
   // ===== CHESS.COM FUNCTIONS =====
@@ -594,14 +746,15 @@
     const pageInfo = getChessComPageInfo();
 
     if (pageInfo.isRelevantPage) {
-      STATE.platform = "chess.com";
+      DomObserverManager.setupObserver(
+        () => tryAddButton("chess.com"),
+        "chess.com"
+      );
 
-      setupChessComMutationObserver(tryAddChessComButton);
-
-      tryAddChessComButton();
+      tryAddButton("chess.com");
 
       const loadHandler = Utils.debounce(
-        () => tryAddChessComButton(),
+        () => tryAddButton("chess.com"),
         CONFIG.RETRY_DELAY
       );
       window.addEventListener("load", loadHandler);
@@ -611,7 +764,6 @@
         loadHandler();
       });
 
-      // Vérification périodique
       const periodicCheck = setInterval(() => {
         if (document.visibilityState === "hidden") {
           return;
@@ -630,10 +782,11 @@
           !STATE.buttonAdded ||
           !document.querySelector(".wintchess-button")
         ) {
-          tryAddChessComButton();
+          tryAddButton("chess.com");
         }
       }, CONFIG.BUTTON_CHECK_INTERVAL);
 
+      // Nettoyage lors de la fermeture de la page
       window.addEventListener("beforeunload", () => {
         clearInterval(periodicCheck);
         DomObserverManager.disconnectExisting();
@@ -647,40 +800,26 @@
     let isRelevantPage = false;
     let isReviewPage = false;
 
-    // Partie live (format: /game/live/123456789)
-    if (/^\/game\/live\/\d+/.test(path)) {
+    // Vérification simplifiée des pages pertinentes avec une seule regex
+    if (/^\/game\/(live|daily|computer)\/\d+/.test(path)) {
       isRelevantPage = true;
       gameId = path.split("/").pop();
     }
-    // Partie daily/correspondance (format: /game/daily/123456789)
-    else if (/^\/game\/daily\/\d+/.test(path)) {
-      isRelevantPage = true;
-      gameId = path.split("/").pop();
-    }
-    // Partie contre l'ordinateur (format: /game/computer/123456789)
-    else if (/^\/game\/computer\/\d+/.test(path)) {
-      isRelevantPage = true;
-      gameId = path.split("/").pop();
-    }
-    // Page d'analyse
-    else if (/^\/analysis/.test(path)) {
-      isRelevantPage = true;
-    }
-    // Toute autre page de jeu
-    else if (/^\/game\//.test(path)) {
+    // Autres pages pertinentes (analyse ou pages de jeu génériques)
+    else if (/^\/analysis|^\/game\//.test(path)) {
       isRelevantPage = true;
     }
 
-    // Détection des pages de bilan
+    // Détection simplifiée des pages de bilan avec une regex optimisée
     if (
-      /^\/analysis\/game\/live|daily|computer/.test(path) ||
-      /^\/game-report/.test(path) ||
-      /^\/analysis\/game-report/.test(path)
+      /^\/analysis\/game\/(live|daily|computer)|^\/game-report|^\/analysis\/game-report/.test(
+        path
+      )
     ) {
       isReviewPage = true;
     }
 
-    // Vérification supplémentaire basée sur les éléments de la page
+    // Vérification des éléments de la page (cette vérification reste nécessaire)
     if (
       !isReviewPage &&
       document.querySelector(".game-report-section, .game-review-container")
@@ -689,55 +828,6 @@
     }
 
     return { isRelevantPage, gameId, isReviewPage };
-  }
-
-  function setupChessComMutationObserver(callback) {
-    DomObserverManager.disconnectExisting();
-
-    const chesscomCallback = Utils.debounce((mutationsList) => {
-      // Ne rien faire si le bouton existe déjà
-      if (STATE.buttonAdded && document.querySelector(".wintchess-button")) {
-        return;
-      }
-
-      // Réinitialiser l'état si le bouton a disparu
-      if (STATE.buttonAdded && !document.querySelector(".wintchess-button")) {
-        STATE.buttonAdded = false;
-      }
-
-      const gameOverModalDetected = mutationsList.some((mutation) => {
-        if (mutation.type !== "childList" || !mutation.addedNodes.length) {
-          return false;
-        }
-
-        return Array.from(mutation.addedNodes).some((node) => {
-          return (
-            node.nodeType === Node.ELEMENT_NODE &&
-            ((node.querySelector &&
-              node.querySelector(".game-over-modal-content")) ||
-              (node.classList &&
-                node.classList.contains("game-over-modal-content")))
-          );
-        });
-      });
-
-      if (gameOverModalDetected) {
-        // Donner un court délai pour s'assurer que le DOM est complètement chargé
-        setTimeout(() => tryAddButtonToGameOverModal(), 300);
-        return;
-      }
-
-      // Si pas de modale de fin de partie, essayer d'ajouter le bouton normalement
-      callback();
-    }, CONFIG.DEBOUNCE_DELAY);
-
-    STATE.observer = new MutationObserver(chesscomCallback);
-
-    STATE.observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: false, // On n'a pas besoin d'observer les attributs pour cette fonction
-    });
   }
 
   // Extraction pour Chess.com ajoutée au PgnExtractor
@@ -1222,102 +1312,6 @@
         );
       }
       tryOpenSharePanel();
-    });
-  }
-
-  function setupChessComMutationObserver(callback) {
-    const observerConfig = {
-      childList: true,
-      subtree: true,
-    };
-
-    const observer = new MutationObserver((mutations) => {
-      let shouldCallback = false;
-      let gameOverModalDetected = false;
-
-      for (const mutation of mutations) {
-        if (mutation.addedNodes.length) {
-          for (const node of mutation.addedNodes) {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const elem = node;
-
-              if (
-                elem.classList &&
-                elem.classList.contains("game-over-modal-content")
-              ) {
-                gameOverModalDetected = true;
-                setTimeout(() => {
-                  tryAddButtonToGameOverModal();
-                }, 300);
-              }
-
-              // Détection des éléments pertinents qui déclenchent un callback
-              if (
-                elem.classList &&
-                (elem.classList.contains("board-layout-main") ||
-                  elem.classList.contains("game-review-summary-button") ||
-                  elem.classList.contains("board-controls-icon-menu-button") ||
-                  elem.classList.contains("side-panel-component") ||
-                  elem.classList.contains("clock-component") ||
-                  elem.classList.contains("highlight-menu") ||
-                  elem.nodeName.toLowerCase() === "chess-board" ||
-                  elem.classList.contains("ui_v5-button-component") ||
-                  elem.classList.contains("board-layout-bottom") ||
-                  elem.classList.contains("game-over-modal") ||
-                  elem.classList.contains("game-over-modal-buttons") ||
-                  elem.classList.contains("board-layout-sidebar"))
-              ) {
-                shouldCallback = true;
-              }
-            }
-          }
-        }
-      }
-
-      if (shouldCallback && !gameOverModalDetected) {
-        callback();
-      }
-    });
-
-    // Commencer à observer le document entier
-    observer.observe(document.documentElement, observerConfig);
-
-    return observer;
-  }
-
-  function tryAddChessComButton(attempts = 0) {
-    STATE.platform = "chess.com";
-
-    // Vérifier si nous sommes sur une page de bilan (dans ce cas, ne pas ajouter le bouton)
-    const pageInfo = getChessComPageInfo();
-    if (pageInfo.isReviewPage) {
-      return false;
-    }
-
-    // Vérifier si nous sommes dans la modale de fin de partie (priorité la plus haute)
-    if (tryAddButtonToGameOverModal()) {
-      return true;
-    }
-
-    // Chercher d'abord le bouton 'Bilan de la partie' pour placer notre bouton juste après
-    let bilanButton = findGameReviewButton();
-    if (bilanButton && bilanButton.parentNode) {
-      return ButtonManager.addButton({
-        id: "chesscom_after_bilan",
-        buttonCreator: createChessComButton,
-        targets: [{ selector: bilanButton, method: "afterend", priority: 20 }],
-        attempts,
-        retryFn: (attempts) => tryAddChessComButton(attempts),
-      });
-    }
-
-    // Si on ne trouve pas le bouton bilan, essayer les sélecteurs génériques
-    return ButtonManager.addButton({
-      id: "chesscom_main",
-      buttonCreator: createChessComButton,
-      targets: ButtonManager.getTargets("chess.com"),
-      attempts,
-      retryFn: tryAddChessComButton,
     });
   }
 
