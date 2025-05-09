@@ -4,6 +4,8 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 
 **[Video Presentation of WintrChess](https://youtu.be/rT5isX7mQds?si=6taY4ExPdrVeVkfr)**
 
+**[Extension on Chrome web Store](https://chromewebstore.google.com/detail/chess-sites-to-wintrchess/ljjbgidgpkhjenpgpjfjidfflnelmpan?authuser=0&hl=en-GB)**
+
 ## ✨ Features
 
 - Adds an "Analyze on WintrChess" button on Lichess and Chess.com
