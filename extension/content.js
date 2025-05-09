@@ -792,7 +792,7 @@
             getRetryDelay(attempts)
           );
         } else {
-          console.warn(getMsg("logMaxAttemptsReached", id));
+          console.warn(getMsg("logMaxAttemptsReached", [id]));
           setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY * 2);
         }
         return false;
