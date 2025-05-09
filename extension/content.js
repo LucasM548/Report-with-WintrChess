@@ -924,19 +924,16 @@
 
       const closeSharePanel = () => {
         try {
-          const closeButtonSelector = `button.cc-modal-header-close[aria-label="${getMsg(
-            "chessComCloseButtonAriaLabel"
-          )}"], .share-menu-close, button[aria-label="${getMsg(
-            "chessComCloseButtonAriaLabel"
-          )}"]`;
-          const closeButton = document.querySelector(closeButtonSelector);
+          const closeButton = document.querySelector(
+            'button.cc-modal-header-close[aria-label="Fermer"], .share-menu-close, button[aria-label="Close"]'
+          );
           if (closeButton) closeButton.click();
         } catch (e) {}
       };
 
       const clickElementWithRetry = async (
         selectors,
-        descriptionKey, // Now a message key
+        descriptionKey,
         maxAttempts = 5,
         attemptDelay = 500
       ) => {
