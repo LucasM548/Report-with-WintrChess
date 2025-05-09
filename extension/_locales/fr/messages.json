@@ -1,0 +1,167 @@
+{
+  "extensionName": {
+    "message": "Analyse Gratuite avec WintrChess",
+    "description": "Le nom de l'extension."
+  },
+  "extensionDescription": {
+    "message": "Analyse gratuite de vos parties Lichess/Chess.com avec WintrChess.",
+    "description": "Description de l'extension."
+  },
+  "extensionActionTitle": {
+    "message": "Analyseur WintrChess",
+    "description": "Infobulle pour le bouton d'action du navigateur."
+  },
+  "buttonTextAnalyzeWintrChess": {
+    "message": "Analyser sur WintrChess",
+    "description": "Texte pour le bouton d'analyse principal."
+  },
+  "notificationPgnExtractionSlow": {
+    "message": "Extraction du PGN en cours (appareil lent)...",
+    "description": "Message de notification."
+  },
+  "notificationPgnExtraction": {
+    "message": "Extraction du PGN en cours...",
+    "description": "Message de notification."
+  },
+  "notificationPgnExtractionError": {
+    "message": "Erreur lors de l'extraction du PGN. Veuillez réessayer.",
+    "description": "Message de notification."
+  },
+  "notificationPgnFetchError": {
+    "message": "Impossible de récupérer le PGN.",
+    "description": "Message de notification."
+  },
+  "notificationGenericErrorPrefix": {
+    "message": "Erreur : ",
+    "description": "Préfixe pour les messages d'erreur génériques."
+  },
+  "buttonStateRetrievingPgn": {
+    "message": "Récupération du PGN...",
+    "description": "Texte du bouton pendant la récupération du PGN."
+  },
+  "notificationWintrchessPreparingAnalysisSlow": {
+    "message": "Préparation de l'analyse (appareil lent)...",
+    "description": "Notification pour la page WintrChess sur les appareils lents."
+  },
+  "notificationWintrchessAutoPasteFailed": {
+    "message": "Collage auto échoué. Veuillez coller le PGN manuellement.",
+    "description": "Notification pour la page WintrChess."
+  },
+  "notificationWintrchessAutoPasteFailedClipboard": {
+    "message": "Collage auto échoué. Veuillez coller le PGN manuellement (PGN copié dans le presse-papiers).",
+    "description": "Notification pour la page WintrChess avec information sur le presse-papiers."
+  },
+  "notificationPgnExtractionSlowChessCom": {
+    "message": "Extraction PGN (appareil lent), veuillez patienter...",
+    "description": "Message de notification pour l'extraction PGN Chess.com sur appareil lent."
+  },
+  "logSlowDeviceDetected": {
+    "message": "[WintrChess] Appareil lent détecté. Facteur de performance : $factor$",
+    "description": "Message de log.",
+    "placeholders": {
+      "factor": {
+        "content": "$1",
+        "example": "2.50"
+      }
+    }
+  },
+  "logFastDeviceDetected": {
+    "message": "[WintrChess] Appareil rapide détecté. Temps : $time$ms",
+    "description": "Message de log.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "25.00"
+      }
+    }
+  },
+  "logPgnFetchNoId": {
+    "message": "[WintrChess] Impossible de récupérer le PGN : pas d'identifiant de partie/étude détecté",
+    "description": "Message de log."
+  },
+  "logPgnFromCacheLichess": {
+    "message": "[WintrChess] PGN récupéré depuis le cache pour Lichess",
+    "description": "Message de log."
+  },
+  "logPgnFromCache": {
+    "message": "[WintrChess] PGN récupéré depuis le cache",
+    "description": "Message de log."
+  },
+  "logPgnFetchApiErrorLichess": {
+    "message": "[WintrChess] Erreur lors de la récupération du PGN via API Lichess :",
+    "description": "Préfixe du message de log."
+  },
+  "logMaxAttemptsReached": {
+    "message": "[WintrChess] Nombre maximal de tentatives atteint pour le bouton $buttonId$. Réinitialisation après un long délai.",
+    "description": "Message de log.",
+    "placeholders": {
+      "buttonId": {
+        "content": "$1",
+        "example": "chesscom_main"
+      }
+    }
+  },
+  "logSharePanelClickFailed": {
+    "message": "[WintrChess] Échec : $description$ non trouvé/cliquable après $attempts$ tentatives.",
+    "description": "Message de log.",
+    "placeholders": {
+      "description": { "content": "$1" },
+      "attempts": { "content": "$2" }
+    }
+  },
+  "errorSharePanelOpenFailed": {
+    "message": "Échec de l'ouverture du panneau de partage",
+    "description": "Message d'erreur."
+  },
+  "errorPgnTabNotFound": {
+    "message": "Onglet PGN non trouvé",
+    "description": "Message d'erreur."
+  },
+  "errorPgnTextareaExtractionFailed": {
+    "message": "Échec de l'extraction du PGN depuis le textarea",
+    "description": "Message d'erreur."
+  },
+  "logWintrchessAutoPasteError": {
+    "message": "[WintrChess] Erreur lors du collage auto sur WintrChess :",
+    "description": "Préfixe du message de log."
+  },
+  "chessComShareButtonAriaLabel": {
+    "message": "Partager",
+    "description": "Aria-label pour le bouton de partage sur Chess.com."
+  },
+  "chessComShareButtonGenericText": {
+    "message": "partage,partager",
+    "description": "Contenu textuel générique pour le bouton de partage sur Chess.com si l'aria-label spécifique échoue."
+  },
+  "chessComShareButtonTitle": {
+    "message": "Partager",
+    "description": "Attribut title pour le bouton de partage sur Chess.com."
+  },
+  "chessComCloseButtonAriaLabel": {
+    "message": "Fermer",
+    "description": "Aria-label pour les boutons de fermeture sur les modales Chess.com."
+  },
+  "chessComPgnTabText": {
+    "message": "PGN",
+    "description": "Texte pour l'onglet PGN sur la modale de partage de Chess.com."
+  },
+  "wintrchessAnalyzeButtonTexts": {
+    "message": "Analyser,Analyze,Analyze game",
+    "description": "Textes séparés par des virgules pour le bouton 'Analyser' sur WintrChess.com."
+  },
+  "descriptionShareButton": {
+    "message": "bouton de partage",
+    "description": "Description pour la fonction clickElementWithRetry."
+  },
+  "descriptionPgnTab": {
+    "message": "onglet PGN",
+    "description": "Description pour la fonction clickElementWithRetry."
+  },
+  "logRetryingInMs": {
+    "message": "[WintrChess] Nouvelle tentative dans $waitTime$ms",
+    "description": "Message de log pour les tentatives de reessai.",
+    "placeholders": {
+      "waitTime": { "content": "$1" }
+    }
+  }
+}

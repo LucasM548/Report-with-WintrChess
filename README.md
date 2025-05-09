@@ -18,7 +18,6 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 
 - - **Lichess** : ![image](https://github.com/user-attachments/assets/113ba51b-7539-47a2-bf96-dea6679b2d8f)
 
-
 ## 🚀 Installation
 
 1. **Developer Mode Installation**:
@@ -39,6 +38,7 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 ## 🔍 Compatible Sites
 
 - **Lichess**:
+
   - Game pages (`lichess.org/{gameID}`)
   - Study pages (`lichess.org/study/{studyID}`)
   - Analysis pages (`lichess.org/analysis`)
@@ -49,12 +49,12 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
   - Analysis pages (`chess.com/analysis`)
   - Play interface (`chess.com/play`)
 
-## 📱 Version Information
+## 🌐 Langues disponibles
 
-### Chrome Extension
-- Native Chrome integration
-- Updated frequently with new features
-- Available in developer mode only for now
+L'extension est disponible dans les langues suivantes :
+- Français (fr)
+- Anglais (en)
+- Espagnol (es)
 
 ## 💡 Acknowledgements
 

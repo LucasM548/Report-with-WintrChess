@@ -1,0 +1,167 @@
+{
+  "extensionName": {
+    "message": "Análisis Gratuito con WintrChess",
+    "description": "El nombre de la extensión."
+  },
+  "extensionDescription": {
+    "message": "Análisis gratuito de tus partidas de Lichess/Chess.com con WintrChess.",
+    "description": "Descripción de la extensión."
+  },
+  "extensionActionTitle": {
+    "message": "Analizador WintrChess",
+    "description": "Información sobre herramientas para el botón de acción del navegador."
+  },
+  "buttonTextAnalyzeWintrChess": {
+    "message": "Analizar en WintrChess",
+    "description": "Texto para el botón de análisis principal."
+  },
+  "notificationPgnExtractionSlow": {
+    "message": "Extrayendo PGN (dispositivo lento)...",
+    "description": "Mensaje de notificación."
+  },
+  "notificationPgnExtraction": {
+    "message": "Extrayendo PGN...",
+    "description": "Mensaje de notificación."
+  },
+  "notificationPgnExtractionError": {
+    "message": "Error al extraer PGN. Por favor, inténtalo de nuevo.",
+    "description": "Mensaje de notificación."
+  },
+  "notificationPgnFetchError": {
+    "message": "No se pudo recuperar el PGN.",
+    "description": "Mensaje de notificación."
+  },
+  "notificationGenericErrorPrefix": {
+    "message": "Error: ",
+    "description": "Prefijo para mensajes de error genéricos."
+  },
+  "buttonStateRetrievingPgn": {
+    "message": "Recuperando PGN...",
+    "description": "Texto del botón mientras se recupera el PGN."
+  },
+  "notificationWintrchessPreparingAnalysisSlow": {
+    "message": "Preparando análisis (dispositivo lento)...",
+    "description": "Notificación para la página de WintrChess en dispositivos lentos."
+  },
+  "notificationWintrchessAutoPasteFailed": {
+    "message": "Autopegado fallido. Por favor, pega el PGN manualmente.",
+    "description": "Notificación para la página de WintrChess."
+  },
+  "notificationWintrchessAutoPasteFailedClipboard": {
+    "message": "Autopegado fallido. Por favor, pega el PGN manualmente (PGN copiado al portapapeles).",
+    "description": "Notificación para la página de WintrChess con información del portapapeles."
+  },
+  "notificationPgnExtractionSlowChessCom": {
+    "message": "Extrayendo PGN (dispositivo lento), por favor espera...",
+    "description": "Mensaje de notificación para la extracción de PGN de Chess.com en dispositivo lento."
+  },
+  "logSlowDeviceDetected": {
+    "message": "[WintrChess] Dispositivo lento detectado. Factor de rendimiento: $factor$",
+    "description": "Mensaje de log.",
+    "placeholders": {
+      "factor": {
+        "content": "$1",
+        "example": "2.50"
+      }
+    }
+  },
+  "logFastDeviceDetected": {
+    "message": "[WintrChess] Dispositivo rápido detectado. Tiempo: $time$ms",
+    "description": "Mensaje de log.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "25.00"
+      }
+    }
+  },
+  "logPgnFetchNoId": {
+    "message": "[WintrChess] No se puede recuperar PGN: ID de partida/estudio no detectado",
+    "description": "Mensaje de log."
+  },
+  "logPgnFromCacheLichess": {
+    "message": "[WintrChess] PGN recuperado del caché para Lichess",
+    "description": "Mensaje de log."
+  },
+  "logPgnFromCache": {
+    "message": "[WintrChess] PGN recuperado del caché",
+    "description": "Mensaje de log."
+  },
+  "logPgnFetchApiErrorLichess": {
+    "message": "[WintrChess] Error al recuperar PGN vía API Lichess:",
+    "description": "Prefijo del mensaje de log."
+  },
+  "logMaxAttemptsReached": {
+    "message": "[WintrChess] Máximo de intentos alcanzado para el botón $buttonId$. Reiniciando tras larga espera.",
+    "description": "Mensaje de log.",
+    "placeholders": {
+      "buttonId": {
+        "content": "$1",
+        "example": "chesscom_main"
+      }
+    }
+  },
+  "logSharePanelClickFailed": {
+    "message": "[WintrChess] Falló: $description$ no encontrado/clicable tras $attempts$ intentos.",
+    "description": "Mensaje de log.",
+    "placeholders": {
+      "description": { "content": "$1" },
+      "attempts": { "content": "$2" }
+    }
+  },
+  "errorSharePanelOpenFailed": {
+    "message": "Fallo al abrir panel de compartir",
+    "description": "Mensaje de error."
+  },
+  "errorPgnTabNotFound": {
+    "message": "Pestaña PGN no encontrada",
+    "description": "Mensaje de error."
+  },
+  "errorPgnTextareaExtractionFailed": {
+    "message": "Fallo al extraer PGN del área de texto",
+    "description": "Mensaje de error."
+  },
+  "logWintrchessAutoPasteError": {
+    "message": "[WintrChess] Error durante autopegado en WintrChess:",
+    "description": "Prefijo del mensaje de log."
+  },
+  "chessComShareButtonAriaLabel": {
+    "message": "Compartir",
+    "description": "Aria-label para el botón de compartir en Chess.com."
+  },
+  "chessComShareButtonGenericText": {
+    "message": "compartir",
+    "description": "Contenido de texto genérico para el botón de compartir en Chess.com si falla el aria-label específico."
+  },
+  "chessComShareButtonTitle": {
+    "message": "Compartir",
+    "description": "Atributo title para el botón de compartir en Chess.com."
+  },
+  "chessComCloseButtonAriaLabel": {
+    "message": "Cerrar",
+    "description": "Aria-label para botones de cierre en modales de Chess.com."
+  },
+  "chessComPgnTabText": {
+    "message": "PGN",
+    "description": "Texto para la pestaña PGN en el modal de compartir de Chess.com."
+  },
+  "wintrchessAnalyzeButtonTexts": {
+    "message": "Analizar,Analizar partida",
+    "description": "Textos separados por comas para el botón 'Analizar' en WintrChess.com."
+  },
+  "descriptionShareButton": {
+    "message": "botón de compartir",
+    "description": "Descripción para la función clickElementWithRetry."
+  },
+  "descriptionPgnTab": {
+    "message": "pestaña PGN",
+    "description": "Descripción para la función clickElementWithRetry."
+  },
+  "logRetryingInMs": {
+    "message": "[WintrChess] Reintentando en $waitTime$ms",
+    "description": "Mensaje de log para los reintentos.",
+    "placeholders": {
+      "waitTime": { "content": "$1" }
+    }
+  }
+}

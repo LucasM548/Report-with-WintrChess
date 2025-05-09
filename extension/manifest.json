@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Chess Sites to WintrChess PGN Transfer",
+  "name": "__MSG_extensionName__",
   "version": "1.1",
-  "description": "Free analysis of your games on Lichess/Chess.com with WintrChess.",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
   "permissions": ["storage"],
   "host_permissions": [
     "https://lichess.org/*",
@@ -13,7 +14,7 @@
     "default_icon": {
       "128": "icons/icon128.png"
     },
-    "default_title": "WintrChess Analyzer"
+    "default_title": "__MSG_extensionActionTitle__"
   },
   "background": {
     "service_worker": "background.js"

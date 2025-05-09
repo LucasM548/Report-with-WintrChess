@@ -1,0 +1,167 @@
+{
+  "extensionName": {
+    "message": "Free Analyze with WintrChess",
+    "description": "The name of the extension."
+  },
+  "extensionDescription": {
+    "message": "Free analysis of your games on Lichess/Chess.com with WintrChess.",
+    "description": "Description of the extension."
+  },
+  "extensionActionTitle": {
+    "message": "WintrChess Analyzer",
+    "description": "Tooltip for the browser action button."
+  },
+  "buttonTextAnalyzeWintrChess": {
+    "message": "Analyze on WintrChess",
+    "description": "Text for the main analysis button."
+  },
+  "notificationPgnExtractionSlow": {
+    "message": "Extracting PGN (slow device)...",
+    "description": "Notification message."
+  },
+  "notificationPgnExtraction": {
+    "message": "Extracting PGN...",
+    "description": "Notification message."
+  },
+  "notificationPgnExtractionError": {
+    "message": "Error extracting PGN. Please try again.",
+    "description": "Notification message."
+  },
+  "notificationPgnFetchError": {
+    "message": "Could not retrieve PGN.",
+    "description": "Notification message."
+  },
+  "notificationGenericErrorPrefix": {
+    "message": "Error: ",
+    "description": "Prefix for generic error messages."
+  },
+  "buttonStateRetrievingPgn": {
+    "message": "Retrieving PGN...",
+    "description": "Button text while PGN is being fetched."
+  },
+  "notificationWintrchessPreparingAnalysisSlow": {
+    "message": "Preparing analysis (slow device)...",
+    "description": "Notification for WintrChess page on slow devices."
+  },
+  "notificationWintrchessAutoPasteFailed": {
+    "message": "Auto-paste failed. Please paste PGN manually.",
+    "description": "Notification for WintrChess page."
+  },
+  "notificationWintrchessAutoPasteFailedClipboard": {
+    "message": "Auto-paste failed. Please paste PGN manually (PGN copied to clipboard).",
+    "description": "Notification for WintrChess page with clipboard info."
+  },
+  "notificationPgnExtractionSlowChessCom": {
+    "message": "Extracting PGN (slow device), please wait...",
+    "description": "Notification message for Chess.com PGN extraction on slow device."
+  },
+  "logSlowDeviceDetected": {
+    "message": "[WintrChess] Slow device detected. Performance factor: $factor$",
+    "description": "Log message.",
+    "placeholders": {
+      "factor": {
+        "content": "$1",
+        "example": "2.50"
+      }
+    }
+  },
+  "logFastDeviceDetected": {
+    "message": "[WintrChess] Fast device detected. Time: $time$ms",
+    "description": "Log message.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "25.00"
+      }
+    }
+  },
+  "logPgnFetchNoId": {
+    "message": "[WintrChess] Cannot retrieve PGN: no game/study ID detected",
+    "description": "Log message."
+  },
+  "logPgnFromCacheLichess": {
+    "message": "[WintrChess] PGN retrieved from cache for Lichess",
+    "description": "Log message."
+  },
+  "logPgnFromCache": {
+    "message": "[WintrChess] PGN retrieved from cache",
+    "description": "Log message."
+  },
+  "logPgnFetchApiErrorLichess": {
+    "message": "[WintrChess] Error retrieving PGN via Lichess API:",
+    "description": "Log message prefix."
+  },
+  "logMaxAttemptsReached": {
+    "message": "[WintrChess] Max attempts reached for button $buttonId$. Resetting after long delay.",
+    "description": "Log message.",
+    "placeholders": {
+      "buttonId": {
+        "content": "$1",
+        "example": "chesscom_main"
+      }
+    }
+  },
+  "logSharePanelClickFailed": {
+    "message": "[WintrChess] Failed: $description$ not found/clickable after $attempts$ attempts.",
+    "description": "Log message.",
+    "placeholders": {
+      "description": { "content": "$1" },
+      "attempts": { "content": "$2" }
+    }
+  },
+  "errorSharePanelOpenFailed": {
+    "message": "Failed to open share panel",
+    "description": "Error message."
+  },
+  "errorPgnTabNotFound": {
+    "message": "PGN tab not found",
+    "description": "Error message."
+  },
+  "errorPgnTextareaExtractionFailed": {
+    "message": "Failed to extract PGN from textarea",
+    "description": "Error message."
+  },
+  "logWintrchessAutoPasteError": {
+    "message": "[WintrChess] Error during auto-paste on WintrChess:",
+    "description": "Log message prefix."
+  },
+  "chessComShareButtonAriaLabel": {
+    "message": "Share",
+    "description": "Aria-label for the share button on Chess.com."
+  },
+  "chessComShareButtonGenericText": {
+    "message": "share",
+    "description": "Generic text content for share button on Chess.com if specific aria-label fails."
+  },
+  "chessComShareButtonTitle": {
+    "message": "Share",
+    "description": "Title attribute for the share button on Chess.com."
+  },
+  "chessComCloseButtonAriaLabel": {
+    "message": "Close",
+    "description": "Aria-label for close buttons on Chess.com modals."
+  },
+  "chessComPgnTabText": {
+    "message": "PGN",
+    "description": "Text for the PGN tab on Chess.com share modal."
+  },
+  "wintrchessAnalyzeButtonTexts": {
+    "message": "Analyze,Analyze game",
+    "description": "Comma-separated texts for the 'Analyze' button on WintrChess.com."
+  },
+  "descriptionShareButton": {
+    "message": "share button",
+    "description": "Description for clickElementWithRetry function."
+  },
+  "descriptionPgnTab": {
+    "message": "PGN tab",
+    "description": "Description for clickElementWithRetry function."
+  },
+  "logRetryingInMs": {
+    "message": "[WintrChess] Retrying in $waitTime$ms",
+    "description": "Log message for retry attempts.",
+    "placeholders": {
+      "waitTime": { "content": "$1" }
+    }
+  }
+}

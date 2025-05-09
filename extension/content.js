@@ -1,6 +1,15 @@
 (function () {
   "use strict";
 
+  function getMsg(messageKey, substitutions) {
+    try {
+      return chrome.i18n.getMessage(messageKey, substitutions);
+    } catch (e) {
+      console.warn(`[WintrChess] Missing translation for key: ${messageKey}`);
+      return messageKey;
+    }
+  }
+
   // Configuration
   const CHESS_ICON_SVG = `<svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
@@ -9,7 +18,7 @@
   const CONFIG = {
     WINTRCHESS_URL: "https://wintrchess.com/",
     PGN_STORAGE_KEY: "wintrChessPgnToPaste",
-    BUTTON_TEXT: "Analyser sur WintrChess",
+    BUTTON_TEXT: "",
     MAX_ATTEMPTS: 50,
     RETRY_DELAY: 1000,
     LONG_RETRY_DELAY: 3000,
@@ -21,7 +30,7 @@
       REVIEW_TERMS: ["bilan", "review", "analysis", "analyser", "analyze"],
       SHARED: [
         {
-          selector: ".game-over-modal-content", // Pour Chess.com, mais gardé comme partagé au cas où
+          selector: ".game-over-modal-content",
           method: "append",
           priority: 20,
         },
@@ -67,14 +76,10 @@
       STATE.isSlowDevice = true;
       STATE.performanceFactor = Math.min(5, Math.max(1.5, duration / 20));
       console.log(
-        `[WintrChess] Appareil lent détecté. Facteur de performance: ${STATE.performanceFactor.toFixed(
-          2
-        )}`
+        getMsg("logSlowDeviceDetected", STATE.performanceFactor.toFixed(2))
       );
     } else {
-      console.log(
-        `[WintrChess] Appareil rapide détecté. Temps: ${duration.toFixed(2)}ms`
-      );
+      console.log(getMsg("logFastDeviceDetected", duration.toFixed(2)));
     }
     return duration;
   }
@@ -95,6 +100,7 @@
   };
 
   function init() {
+    CONFIG.BUTTON_TEXT = getMsg("buttonTextAnalyzeWintrChess");
     detectDevicePerformance();
     const hostname = window.location.hostname;
 
@@ -112,14 +118,14 @@
     const pageInfo = getPageInfoFn();
 
     if (pageInfo.isRelevantPage) {
-      STATE.platform = platformName; // Assurer que STATE.platform est défini tôt
+      STATE.platform = platformName;
 
       DomObserverManager.setupObserver(
         () => tryAddButton(platformName),
         platformName
       );
 
-      tryAddButton(platformName); // Premier essai
+      tryAddButton(platformName);
 
       const debouncedTryAddButton = Utils.debounce(
         () => tryAddButton(platformName),
@@ -134,9 +140,6 @@
 
       const periodicCheck = setInterval(() => {
         if (document.visibilityState === "hidden") return;
-
-        // Si le bouton n'est pas visible ou a été retiré, essayer de le rajouter
-        // tryAddButton gère les cas spécifiques comme la modal de fin de partie pour chess.com
         if (
           !STATE.buttonAdded ||
           !document.querySelector(".wintchess-button")
@@ -148,7 +151,7 @@
       window.addEventListener("beforeunload", () => {
         clearInterval(periodicCheck);
         DomObserverManager.disconnectExisting();
-        ButtonManager.removeAllButtons(); // S'assurer que tout est nettoyé
+        ButtonManager.removeAllButtons();
       });
     }
   }
@@ -169,8 +172,6 @@
       } else if (pathParts[0] === "study" && pathParts.length >= 2) {
         isRelevantPage = true;
         studyId = pathParts[1];
-        // Note: PgnExtractor.fromLichess utilise gameId. Si les PGN d'études doivent être extraits,
-        // il faudra ajuster PgnExtractor ou passer studyId.
       } else if (pathParts[0] === "analysis") {
         isRelevantPage = true;
       }
@@ -232,8 +233,6 @@
       const observerConfig = {
         childList: true,
         subtree: true,
-        // Pour Lichess, les changements de classe sont importants pour certains conteneurs.
-        // Pour Chess.com, on se fie plus aux ajouts de nœuds.
         attributes: platform === "lichess",
         attributeFilter: platform === "lichess" ? ["class"] : undefined,
       };
@@ -241,8 +240,6 @@
       const debouncedCallback = Utils.debounce(callback, CONFIG.DEBOUNCE_DELAY);
 
       const processedCallback = (mutationsList) => {
-        // Éviter de traiter si un bouton existe DÉJÀ dans le cas général,
-
         let hasRelevantChanges = false;
         for (const mutation of mutationsList) {
           if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
@@ -282,7 +279,6 @@
       };
 
       STATE.observer = new MutationObserver(processedCallback);
-      // Observer document.documentElement pour une couverture plus large, surtout pour les modales.
       STATE.observer.observe(document.documentElement, observerConfig);
       return STATE.observer;
     },
@@ -294,15 +290,11 @@
       }
     },
 
-    // Vérifie si l'élément lui-même est pertinent ou s'il contient des enfants pertinents (utile pour les ajouts de subtree)
     isElementOrContainsRelevant(element, platformRelevantClasses) {
       if (!element || typeof element.matches !== "function") return false;
-
-      // Vérifier l'élément lui-même
       if (this.isRelevantSingleElement(element, platformRelevantClasses))
         return true;
 
-      // Vérifier les enfants (si l'élément ajouté est un conteneur)
       for (const cls of platformRelevantClasses) {
         if (element.querySelector(`.${cls.split(" ").join(".")}`)) return true;
       }
@@ -315,7 +307,6 @@
     isRelevantSingleElement(element, platformRelevantClasses) {
       if (!element || !element.classList) return false;
       for (const className of platformRelevantClasses) {
-        // Gérer les sélecteurs de classes multiples (ex: "analyse__controls .left-buttons")
         const classParts = className.split(" ");
         if (
           classParts.every((part) =>
@@ -359,24 +350,18 @@
 
     async fromLichess() {
       const pageInfo = getLichessPageInfo();
-      // Actuellement, utilise gameId. Pour les études, il faudrait utiliser studyId et une URL d'API différente.
-      // Exemple: `https://lichess.org/study/${pageInfo.studyId}.pgn`
       if (!pageInfo.gameId && !pageInfo.studyId) {
-        // Ajusté pour inclure studyId comme possibilité
-        console.log(
-          "[WintrChess] Impossible de récupérer le PGN: pas d'identifiant de partie/étude détecté"
-        );
+        console.log(getMsg("logPgnFetchNoId"));
         return null;
       }
 
-      // Pour l'instant, on priorise gameId s'il existe, sinon on pourrait adapter pour studyId
       const idToFetch = pageInfo.gameId || pageInfo.studyId;
       const isStudy = !pageInfo.gameId && pageInfo.studyId;
 
       const cacheKey = `lichess_${idToFetch}`;
       const cachedPgn = this._getFromCache(cacheKey);
       if (cachedPgn) {
-        console.log("[WintrChess] PGN récupéré depuis le cache pour Lichess");
+        console.log(getMsg("logPgnFromCacheLichess"));
         return cachedPgn;
       }
 
@@ -387,10 +372,7 @@
         }
         return pgn;
       } catch (error) {
-        console.error(
-          "[WintrChess] Erreur lors de la récupération du PGN via API Lichess:",
-          error
-        );
+        console.error(getMsg("logPgnFetchApiErrorLichess"), error);
         return null;
       }
     },
@@ -402,14 +384,14 @@
       }`;
       const cachedPgn = this._getFromCache(cacheKey);
       if (cachedPgn) {
-        console.log("[WintrChess] PGN récupéré depuis le cache");
+        console.log(getMsg("logPgnFromCache"));
         return cachedPgn;
       }
 
       NotificationManager.show(
         STATE.isSlowDevice
-          ? "Extraction du PGN en cours (appareil lent)..."
-          : "Extraction du PGN en cours...",
+          ? getMsg("notificationPgnExtractionSlow")
+          : getMsg("notificationPgnExtraction"),
         STATE.isSlowDevice ? 8000 : 3000
       );
 
@@ -430,7 +412,7 @@
                 1000 *
                 (attempts + 1) *
                 (STATE.isSlowDevice ? STATE.performanceFactor : 1);
-              console.log(`[WintrChess] Nouvelle tentative dans ${waitTime}ms`);
+              console.log(getMsg("logRetryingInMs", waitTime.toString()));
               await Utils.sleep(waitTime);
             }
           } catch (err) {
@@ -448,15 +430,12 @@
           return pgn;
         }
         throw new Error(
-          "Impossible de récupérer le PGN depuis la page Chess.com après plusieurs tentatives."
+          "Unable to retrieve the PGN from the Chess.com page after several attempts."
         );
       } catch (error) {
-        console.error(
-          "[WintrChess] Erreur lors de l'extraction du PGN:",
-          error
-        );
+        console.error("[WintrChess] Error extracting PGN:", error);
         NotificationManager.show(
-          "Erreur lors de l'extraction du PGN. Veuillez réessayer.",
+          getMsg("notificationPgnExtractionError"),
           5000
         );
         throw error;
@@ -466,7 +445,7 @@
 
   function fetchPgnFromApi(id, isStudy = false) {
     const apiUrl = isStudy
-      ? `https://lichess.org/study/${id}.pgn?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false` // Adaptez les params si besoin pour les études
+      ? `https://lichess.org/study/${id}.pgn?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`
       : `https://lichess.org/game/export/${id}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
 
     return new Promise((resolve, reject) => {
@@ -482,7 +461,7 @@
             reject(
               response
                 ? response.error
-                : "Erreur de communication avec le background script"
+                : "Error communicating with the background script"
             );
           }
         }
@@ -494,7 +473,7 @@
     create(options) {
       const { className, style, innerHTML, onClick } = options;
       const button = document.createElement("button");
-      button.className = className + " wintchess-button"; // Toujours ajouter wintchess-button
+      button.className = className + " wintchess-button";
       button.style.cssText = style;
       button.innerHTML = innerHTML;
       this.attachEventHandler(button, onClick);
@@ -504,12 +483,12 @@
     attachEventHandler(button, onClickHandler) {
       button.addEventListener("click", async (event) => {
         event.stopPropagation();
-        event.preventDefault(); // Peut être utile pour éviter des comportements par défaut
+        event.preventDefault();
         button.disabled = true;
 
         const textElement = button.querySelector(".button-text") || button;
         const originalText = textElement.textContent;
-        textElement.textContent = "Récupération du PGN...";
+        textElement.textContent = getMsg("buttonStateRetrievingPgn");
 
         try {
           const pgn = await onClickHandler();
@@ -520,7 +499,7 @@
               url: CONFIG.WINTRCHESS_URL,
             });
           } else {
-            NotificationManager.show("Impossible de récupérer le PGN.");
+            NotificationManager.show(getMsg("notificationPgnFetchError"));
           }
         } catch (error) {
           console.error(
@@ -528,12 +507,12 @@
             error
           );
           NotificationManager.show(
-            "Erreur: " + (error.message || "Impossible de récupérer le PGN.")
+            getMsg("notificationGenericErrorPrefix") +
+              (error.message || getMsg("notificationPgnFetchError"))
           );
         } finally {
           setTimeout(() => {
             if (button && button.isConnected) {
-              // Vérifier si le bouton est toujours dans le DOM
               button.disabled = false;
               textElement.textContent = originalText;
             }
@@ -543,28 +522,31 @@
     },
   };
 
-  const BUTTON_CONFIGS = {
-    lichess: {
-      className: "button button-metal",
-      style: `display: block; width: calc(100% - 10px); margin: 8px auto; padding: 5px 10px;`,
-      innerHTML: `<span class="button-text">${CONFIG.BUTTON_TEXT}</span>`,
-    },
-    chesscom: {
-      className:
-        "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-      style: `margin-top: 8px; width: 100%; margin-bottom: 6px;`,
-      innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon">${CHESS_ICON_SVG}</span><span class="cc-button-one-line button-text">${CONFIG.BUTTON_TEXT}</span>`,
-    },
-    gameOver: {
-      // Spécifique à la modal de fin de partie de Chess.com
-      className:
-        "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-      style: `width: 100%; margin-top: 3px; margin-bottom: 6px;`,
-      innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">${CHESS_ICON_SVG}</span><span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${CONFIG.BUTTON_TEXT}</span>`,
-    },
-  };
+  function getButtonConfigs(localizedButtonText) {
+    return {
+      lichess: {
+        className: "button button-metal",
+        style: `display: block; width: calc(100% - 10px); margin: 8px auto; padding: 5px 10px;`,
+        innerHTML: `<span class="button-text">${localizedButtonText}</span>`,
+      },
+      chesscom: {
+        className:
+          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
+        style: `margin-top: 8px; width: 100%; margin-bottom: 6px;`,
+        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon">${CHESS_ICON_SVG}</span><span class="cc-button-one-line button-text">${localizedButtonText}</span>`,
+      },
+      gameOver: {
+        className:
+          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
+        style: `width: 100%; margin-top: 3px; margin-bottom: 6px;`,
+        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">${CHESS_ICON_SVG}</span><span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${localizedButtonText}</span>`,
+      },
+    };
+  }
 
   function createWintrChessButton(type = STATE.platform) {
+    const BUTTON_CONFIGS = getButtonConfigs(CONFIG.BUTTON_TEXT);
+
     const typeKey = type === "chess.com" ? "chesscom" : type;
     const config = BUTTON_CONFIGS[typeKey] || BUTTON_CONFIGS.lichess;
 
@@ -644,7 +626,7 @@
 
       if (!insertionPoint) {
         insertionPoint = buttonList;
-        referenceNode = buttonList.firstChild; // Insérer au début si aucune référence trouvée
+        referenceNode = buttonList.firstChild;
       }
 
       if (insertionPoint) {
@@ -660,7 +642,7 @@
       return false;
     } catch (error) {
       console.error(
-        "[WintrChess] Erreur lors de l'ajout du bouton à la modale:",
+        "[WintrChess] Erreur lors de l'ajout du bouton à la modale:", // Can stay English
         error
       );
       return false;
@@ -710,7 +692,6 @@
         ButtonManager.removeAllButtons();
         return false;
       }
-      // Tenter d'ajouter à la modale de fin de partie en priorité
       if (tryAddButtonToGameOverModal()) {
         return true;
       }
@@ -719,8 +700,6 @@
       }
     }
 
-    // Pour chess.com, après avoir géré la modal, on cherche le bouton "Bilan"
-    // mais on pourrait avoir une target prioritaire pour se placer après le bouton "Bilan".
     let targets = ButtonManager.getTargets(platform);
 
     if (platform === "chess.com") {
@@ -813,16 +792,14 @@
             getRetryDelay(attempts)
           );
         } else {
-          console.warn(
-            `[WintrChess] Max attempts reached for button ${id}. Resetting after long delay.`
-          );
+          console.warn(getMsg("logMaxAttemptsReached", id));
           setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY * 2);
         }
         return false;
       },
 
       insertButton(id, button, targets) {
-        let sortedTargets = targetCache.get(JSON.stringify(targets)); // Clé de cache basée sur les targets
+        let sortedTargets = targetCache.get(JSON.stringify(targets));
         if (!sortedTargets) {
           sortedTargets = [...targets].sort(
             (a, b) => (b.priority || 0) - (a.priority || 0)
@@ -845,7 +822,6 @@
 
           if (!elementToAttachTo) continue;
 
-          // Éviter d'ajouter si un bouton wintchess est déjà enfant direct ou frère direct
           if (
             method === "append" &&
             elementToAttachTo.querySelector(
@@ -940,7 +916,6 @@
   })();
 
   async function getPgnFromSharePanel() {
-    // Spécifique à Chess.com
     return new Promise((resolve, reject) => {
       const getDelay = (baseDelay) =>
         STATE.isSlowDevice
@@ -949,16 +924,19 @@
 
       const closeSharePanel = () => {
         try {
-          const closeButton = document.querySelector(
-            'button.cc-modal-header-close[aria-label="Fermer"], .share-menu-close, button[aria-label="Close"]'
-          );
+          const closeButtonSelector = `button.cc-modal-header-close[aria-label="${getMsg(
+            "chessComCloseButtonAriaLabel"
+          )}"], .share-menu-close, button[aria-label="${getMsg(
+            "chessComCloseButtonAriaLabel"
+          )}"]`;
+          const closeButton = document.querySelector(closeButtonSelector);
           if (closeButton) closeButton.click();
         } catch (e) {}
       };
 
       const clickElementWithRetry = async (
         selectors,
-        description,
+        descriptionKey, // Now a message key
         maxAttempts = 5,
         attemptDelay = 500
       ) => {
@@ -982,7 +960,10 @@
           }
         }
         console.error(
-          `[WintrChess] Échec: ${description} non trouvé/cliquable après ${maxAttempts} tentatives.`
+          getMsg("logSharePanelClickFailed", [
+            getMsg(descriptionKey),
+            maxAttempts.toString(),
+          ])
         );
         return false;
       };
@@ -1015,21 +996,21 @@
 
       (async () => {
         let shareButtonSelectors = [
-          'button[aria-label="Share"]',
+          `button[aria-label="${getMsg("chessComShareButtonAriaLabel")}"]`,
           ".icon-font-chess.share",
           '[data-cy="share-button"]',
           "button.share-button",
           "button.game-controls-component__share",
-          'button[title="Share"]',
-          'button[title="Partager"]',
+          `button[title="${getMsg("chessComShareButtonTitle")}"]`,
         ];
         if (STATE.isSlowDevice) {
-          // Sélecteurs plus génériques pour appareils lents
           shareButtonSelectors.push({
             findFn: () =>
               Array.from(document.querySelectorAll("button")).find((btn) => {
                 const text = btn.textContent?.toLowerCase() || "";
-                return text.includes("share") || text.includes("partage");
+                return getMsg("chessComShareButtonGenericText")
+                  .split(",")
+                  .some((term) => text.includes(term.trim()));
               }),
           });
         }
@@ -1037,14 +1018,15 @@
         if (
           !(await clickElementWithRetry(
             shareButtonSelectors,
-            "bouton de partage",
+            "descriptionShareButton",
             STATE.isSlowDevice ? 8 : 5
           ))
         ) {
-          return reject("Échec de l'ouverture du panneau de partage");
+          return reject(getMsg("errorSharePanelOpenFailed"));
         }
         await Utils.sleep(getDelay(STATE.isSlowDevice ? 1000 : 500));
 
+        const pgnTabText = getMsg("chessComPgnTabText").toUpperCase();
         const pgnTabSelectors = [
           'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
           'button.cc-tab-item-component[aria-controls="tabpanel-pgn"]',
@@ -1059,21 +1041,22 @@
                 document.querySelectorAll(
                   ".share-menu-tab button, .cc-tabs-component button, .modal-tabs button, .tabs button, nav.tabs button, .tabs-component button"
                 )
-              ).find((btn) => btn.textContent?.toUpperCase().includes("PGN")),
+              ).find((btn) =>
+                btn.textContent?.toUpperCase().includes(pgnTabText)
+              ),
           },
         ];
         if (
           !(await clickElementWithRetry(
             pgnTabSelectors,
-            "onglet PGN",
+            "descriptionPgnTab",
             5,
             getDelay(500)
           ))
         ) {
           closeSharePanel();
-          return reject("Onglet PGN non trouvé");
+          return reject(getMsg("errorPgnTabNotFound"));
         }
-        // Augmenter le délai d'attente pour le chargement du PGN
         await Utils.sleep(getDelay(STATE.isSlowDevice ? 1500 : 1000));
 
         const pgn = await extractPgnValue(5, getDelay(500));
@@ -1081,16 +1064,16 @@
         if (pgn) {
           resolve(pgn);
         } else {
-          reject("Échec de l'extraction du PGN depuis le textarea");
+          reject(getMsg("errorPgnTextareaExtractionFailed"));
         }
       })().catch((err) => {
-        closeSharePanel(); // S'assurer que le panneau est fermé en cas d'erreur
+        closeSharePanel();
         reject(err);
       });
 
       if (STATE.isSlowDevice) {
         NotificationManager.show(
-          "Extraction PGN (appareil lent), veuillez patienter...",
+          getMsg("notificationPgnExtractionSlowChessCom"),
           5000
         );
       }
@@ -1098,18 +1081,14 @@
   }
 
   function findGameReviewButton() {
-    // Spécifique à Chess.com
-    const reviewTerms = CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.map((term) =>
-      term.toLowerCase()
-    );
-    // Sélecteurs spécifiques pour le bouton "Bilan", du plus précis au plus générique
+    const reviewTerms = CONFIG.BUTTON_SELECTORS.REVIEW_TERMS;
     const selectors = [
       "button.game-over-review-button-component",
+      ".game-review-buttons-component > button.cc-button-component.cc-button-primary",
       ".game-over-buttons-component .button-with-icon-primary",
       ".sidebar-buttons-container button.ui_v5-button-component.primary",
       ".board-layout-sidebar .review-button-component button",
       ".layout-sidebar .review-button-component button",
-      // Sélecteurs plus génériques si les précédents échouent
       "button.cc-button-component.cc-button-primary.cc-button-xx-large.cc-bg-primary",
       "button.cc-button-component.cc-button-primary",
     ];
@@ -1117,7 +1096,7 @@
     for (const selector of selectors) {
       const buttons = document.querySelectorAll(
         selector + ":not(.wintchess-button)"
-      ); // Exclure notre propre bouton
+      );
       for (const btn of buttons) {
         const btnText = btn.textContent?.toLowerCase() || "";
         const ariaLabel = btn.getAttribute("aria-label")?.toLowerCase() || "";
@@ -1126,7 +1105,6 @@
             (term) => btnText.includes(term) || ariaLabel.includes(term)
           )
         ) {
-          // Vérifier qu'il ne s'agit pas d'un bouton "Nouvelle partie" ou similaire
           if (
             !btnText.includes("new game") &&
             !btnText.includes("nouvelle partie")
@@ -1136,7 +1114,6 @@
         }
       }
     }
-    // Fallback: prendre un bouton proéminent s'il correspond à un "bouton d'action principal"
     const prominentButton = document.querySelector(
       "button.cc-button-component.cc-button-xx-large:not(.wintchess-button), .post-game-buttons-component button:first-of-type:not(.wintchess-button)"
     );
@@ -1155,7 +1132,7 @@
   function initWintrChess() {
     if (STATE.isSlowDevice) {
       NotificationManager.show(
-        "Préparation de l'analyse (appareil lent)...",
+        getMsg("notificationWintrchessPreparingAnalysisSlow"),
         5000
       );
     }
@@ -1169,6 +1146,10 @@
     );
     if (!pgnToPaste) return;
 
+    const localizedAnalyzeButtonTexts = getMsg("wintrchessAnalyzeButtonTexts")
+      .split(",")
+      .map((t) => t.trim().toLowerCase());
+
     const selectorsConfig = [
       {
         textarea: "textarea.TerVPsT9aZ0soO8yjZU4",
@@ -1177,15 +1158,15 @@
       },
       {
         textarea: 'textarea[placeholder*="PGN"]',
-        buttonText: ["Analyser", "Analyze", "Analyze game"],
+        buttonText: localizedAnalyzeButtonTexts,
         priority: 2,
       },
       {
         textarea: "textarea",
-        buttonText: ["Analyser", "Analyze", "Analyze game"],
+        buttonText: localizedAnalyzeButtonTexts,
         priority: 1,
       },
-    ].sort((a, b) => b.priority - a.priority); // Trier par priorité
+    ].sort((a, b) => b.priority - a.priority);
 
     let attempts = 0;
     const maxAttempts = 30;
@@ -1198,7 +1179,7 @@
         const button = sel.button
           ? document.querySelector(sel.button)
           : sel.buttonText
-          ? findWintrChessButtonByText(sel.buttonText)
+          ? findWintrChessButtonByText(sel.buttonText) // Pass localized texts
           : null;
         if (button) return { textarea, button };
       }
@@ -1218,7 +1199,7 @@
         textarea.dispatchEvent(
           new Event("change", { bubbles: true, cancelable: true })
         );
-        await Utils.sleep(STATE.isSlowDevice ? 600 : 300); // Délai plus long si appareil lent
+        await Utils.sleep(STATE.isSlowDevice ? 600 : 300);
 
         if (!button.disabled) {
           button.click();
@@ -1227,10 +1208,7 @@
         }
         return false;
       } catch (error) {
-        console.error(
-          "[WintrChess] Erreur lors du collage auto sur WintrChess:",
-          error
-        );
+        console.error(getMsg("logWintrchessAutoPasteError"), error);
         return false;
       }
     };
@@ -1258,13 +1236,13 @@
       attempts++;
       if (attempts >= maxAttempts) {
         NotificationManager.show(
-          "Collage auto échoué. Veuillez coller le PGN manuellement.",
+          getMsg("notificationWintrchessAutoPasteFailed"),
           5000
         );
         if (navigator.clipboard && pgnToPaste) {
           await navigator.clipboard.writeText(pgnToPaste);
           NotificationManager.show(
-            "Collage auto échoué. Veuillez coller le PGN manuellement (PGN copié dans le presse-papiers).",
+            getMsg("notificationWintrchessAutoPasteFailedClipboard"),
             5000
           );
         }
@@ -1283,9 +1261,8 @@
       document.querySelectorAll("button:not([disabled])")
     );
     for (const text of textOptions) {
-      const textLower = text.toLowerCase();
       const foundButton = allButtons.find((button) =>
-        button.textContent?.toLowerCase().includes(textLower)
+        button.textContent?.toLowerCase().includes(text.toLowerCase())
       );
       if (foundButton) return foundButton;
     }
