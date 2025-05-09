@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chess Sites to WintrChess PGN Transfer",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Free analysis of your games on Lichess/Chess.com with WintrChess.",
   "permissions": ["storage"],
   "host_permissions": [
