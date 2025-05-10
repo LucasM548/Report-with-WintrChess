@@ -62,7 +62,91 @@
     isSlowDevice: false,
     performanceFactor: 1,
     initialized: false,
+    customCssInjected: false,
   };
+
+  function injectLichessCustomButtonCss() {
+    if (STATE.customCssInjected || STATE.platform !== "lichess") return;
+
+    const css = `
+      .wintchess-aurora-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-family: 'Noto Sans', sans-serif;
+        font-size: 0.95em;
+        font-weight: 600;
+        color: #ffffff;
+        cursor: pointer;
+        border: none;
+        outline: none;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        width: 97%;
+        box-sizing: border-box;
+        margin: 10px auto;
+        background: linear-gradient(135deg, #483D8B, #6A5ACD, #836FFF, #9370DB);
+        background-size: 300% 300%;
+        animation: wintchessAuroraGradientFlow 10s ease infinite;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .wintchess-aurora-button:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.6s ease;
+      }
+
+      .wintchess-aurora-button:hover:before {
+        left: 100%;
+      }
+
+      .wintchess-aurora-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        filter: brightness(1.1);
+      }
+
+      .wintchess-aurora-button:active {
+        transform: translateY(0px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+        filter: brightness(0.95);
+      }
+
+      .wintchess-aurora-button .wintchess-icon {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+        flex-shrink: 0;
+      }
+
+      .wintchess-aurora-button .button-text {
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      @keyframes wintchessAuroraGradientFlow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+    `;
+    const styleElement = document.createElement("style");
+    styleElement.type = "text/css";
+    styleElement.id = "wintchess-custom-lichess-style";
+    styleElement.appendChild(document.createTextNode(css));
+    (document.head || document.documentElement).appendChild(styleElement);
+    STATE.customCssInjected = true;
+  }
 
   function detectDevicePerformance() {
     const startTime = performance.now();
@@ -100,7 +184,6 @@
       new Promise((resolve) => chrome.storage.local.remove(key, resolve)),
   };
 
-  // Minimal initialization for utilities needed by icon click action
   function ensureBasicInit() {
     if (STATE.initialized) return;
 
@@ -114,6 +197,7 @@
       const hostname = window.location.hostname;
       if (hostname.includes("lichess.org")) {
         STATE.platform = "lichess";
+        injectLichessCustomButtonCss();
       } else if (hostname.includes("www.chess.com")) {
         STATE.platform = "chess.com";
       } else if (hostname.includes("wintrchess.com")) {
@@ -135,7 +219,6 @@
     }
   }
 
-  // ===== INITIALISATION GÉNÉRALISÉE POUR LES PLATEFORMES =====
   function initializePlatformSpecificLogic(platformName, getPageInfoFn) {
     const pageInfo = getPageInfoFn();
 
@@ -162,7 +245,7 @@
         if (document.visibilityState === "hidden") return;
         if (
           !STATE.buttonAdded ||
-          !document.querySelector(".wintchess-button")
+          !document.querySelector(".wintchess-button, .wintchess-aurora-button")
         ) {
           tryAddButton(platformName);
         }
@@ -176,7 +259,6 @@
     }
   }
 
-  // ===== LICHESS FUNCTIONS =====
   function getLichessPageInfo() {
     const pathParts = window.location.pathname
       .split("/")
@@ -199,7 +281,6 @@
     return { isRelevantPage, gameId, studyId };
   }
 
-  // ===== CHESS.COM FUNCTIONS =====
   function getChessComPageInfo() {
     const path = window.location.pathname;
     let gameId = null;
@@ -505,8 +586,15 @@
     create(options) {
       const { className, style, innerHTML, onClick } = options;
       const button = document.createElement("button");
-      button.className = className + " wintchess-button";
-      button.style.cssText = style;
+      if (className.includes("wintchess-aurora-button")) {
+        button.className = className;
+      } else {
+        button.className = className + " wintchess-button";
+      }
+
+      if (style) {
+        button.style.cssText = style;
+      }
       button.innerHTML = innerHTML;
       this.attachEventHandler(button, onClick);
       return button;
@@ -553,11 +641,19 @@
   };
 
   function getButtonConfigs(localizedButtonText) {
+    // Ensure CSS is injected if on Lichess and not already done
+    if (STATE.platform === "lichess" && !STATE.customCssInjected) {
+      injectLichessCustomButtonCss();
+    }
     return {
       lichess: {
-        className: "button button-metal",
-        style: `display: block; width: calc(100% - 10px); margin: 8px auto; padding: 5px 10px;`,
-        innerHTML: `<span class="button-text">${localizedButtonText}</span>`,
+        className: "wintchess-aurora-button",
+        innerHTML: `
+          <svg class="wintchess-icon" viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
+          </svg>
+          <span class="button-text">${localizedButtonText}</span>
+        `,
       },
       chesscom: {
         className:
@@ -750,7 +846,7 @@
 
     return ButtonManager.addButton({
       id: buttonId,
-      buttonCreator: () => createWintrChessButton(platform),
+      buttonCreator: () => createWintrChessButton(platform), // Pass platform to ensure correct config is used
       targets: targets,
       attempts: attempts,
       retryFn: (newAttempts) => tryAddButton(platform, newAttempts),
@@ -841,6 +937,11 @@
           targetCache.set(JSON.stringify(targets), sortedTargets);
         }
 
+        const buttonSelector =
+          STATE.platform === "lichess"
+            ? ".wintchess-aurora-button"
+            : ".wintchess-button";
+
         for (const targetConfig of sortedTargets) {
           const { selector, method, element: predefinedElement } = targetConfig;
           let elementToAttachTo = null;
@@ -861,18 +962,16 @@
           if (
             method === "append" &&
             elementToAttachTo.querySelector(
-              ":scope > .wintchess-button, :scope > .wintchess-button-container"
+              `:scope > ${buttonSelector}, :scope > .wintchess-button-container ${buttonSelector}`
             )
           )
             continue;
           if (
             (method === "after" || method === "afterend") &&
             elementToAttachTo.nextElementSibling &&
-            (elementToAttachTo.nextElementSibling.classList.contains(
-              "wintchess-button"
-            ) ||
-              elementToAttachTo.nextElementSibling.classList.contains(
-                "wintchess-button-container"
+            (elementToAttachTo.nextElementSibling.matches(buttonSelector) ||
+              elementToAttachTo.nextElementSibling.matches(
+                `.wintchess-button-container ${buttonSelector}`
               ))
           )
             continue;
@@ -1109,10 +1208,6 @@
           getMsg("notificationPgnExtractionSlowChessCom"),
           5000
         );
-        NotificationManager.show(
-          getMsg("notificationPgnExtractionSlowChessCom"),
-          5000
-        );
       }
     });
   }
@@ -1133,7 +1228,7 @@
 
     for (const selector of selectors) {
       const buttons = document.querySelectorAll(
-        selector + ":not(.wintchess-button)"
+        selector + ":not(.wintchess-button):not(.wintchess-aurora-button)"
       );
       for (const btn of buttons) {
         const btnText = btn.textContent?.toLowerCase() || "";
@@ -1153,7 +1248,7 @@
       }
     }
     const prominentButton = document.querySelector(
-      "button.cc-button-component.cc-button-xx-large:not(.wintchess-button), .post-game-buttons-component button:first-of-type:not(.wintchess-button)"
+      "button.cc-button-component.cc-button-xx-large:not(.wintchess-button):not(.wintchess-aurora-button), .post-game-buttons-component button:first-of-type:not(.wintchess-button):not(.wintchess-aurora-button)"
     );
     if (
       prominentButton &&
