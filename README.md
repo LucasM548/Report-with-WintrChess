@@ -14,9 +14,13 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 - One-click transfer to WintrChess
 - Works on completed games or during analysis
 
-- **Chess.com** :![image](https://github.com/user-attachments/assets/23833386-0545-453a-9997-48600fd34cad)
+### **Screenshots**
 
-- - **Lichess** : ![image](https://github.com/user-attachments/assets/113ba51b-7539-47a2-bf96-dea6679b2d8f)
+**Chess.com**
+<img src="https://github.com/user-attachments/assets/23833386-0545-453a-9997-48600fd34cad" alt="Chess.com Integration" width="600" />
+
+**Lichess**
+<img src="https://github.com/user-attachments/assets/113ba51b-7539-47a2-bf96-dea6679b2d8f" alt="Lichess Integration" width="600" />
 
 ## 🚀 Installation
 
@@ -35,6 +39,12 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 3. Click on this button
 4. A new WintrChess window will open with your game ready for analysis
 
+**Alternatively:**
+
+- Click directly on the extension icon in your browser toolbar
+  - This will analyze the current chess game if one is detected
+  - Or open WintrChess.com if no chess game is accessible on the current page
+
 ## 🔍 Compatible Sites
 
 - **Lichess**:
@@ -52,6 +62,7 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 ## 🌐 Langues disponibles
 
 L'extension est disponible dans les langues suivantes :
+
 - Français (fr)
 - Anglais (en)
 - Espagnol (es)
