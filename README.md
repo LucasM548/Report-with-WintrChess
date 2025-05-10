@@ -20,7 +20,8 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 <img src="https://github.com/user-attachments/assets/257d8e46-e84f-4c5e-a9af-002871099326" alt="Chess.com Integration" height="500" />
 
 **Lichess**
-<img src="https://github.com/user-attachments/assets/113ba51b-7539-47a2-bf96-dea6679b2d8f" alt="Lichess Integration" width="600" />
+<img src="https://github.com/user-attachments/assets/7d787d19-8a95-4776-9fa3-7d3089ed20da" alt="Lichess Integration" height="500" />
+
 
 ## 🚀 Installation
 
