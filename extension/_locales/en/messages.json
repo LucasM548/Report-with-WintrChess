@@ -141,10 +141,6 @@
     "message": "Close",
     "description": "Aria-label for close buttons on Chess.com modals."
   },
-  "chessComPgnTabText": {
-    "message": "PGN",
-    "description": "Text for the PGN tab on Chess.com share modal."
-  },
   "wintrchessAnalyzeButtonTexts": {
     "message": "Analyze,Analyze game",
     "description": "Comma-separated texts for the 'Analyze' button on WintrChess.com."
