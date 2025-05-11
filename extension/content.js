@@ -696,14 +696,77 @@
       } finally {
         if (sharePanelOpened) {
           try {
-            const closeButton = document.querySelector(
-              'button.cc-modal-header-close, .share-menu-close, button[aria-label*="Close" i], button[aria-label*="Fermer" i]'
+            const closeButtonSelectors = [
+              "button.cc-modal-header-close",
+              ".share-menu-close",
+              'button[aria-label*="Close" i]', // Anglais
+              'button[aria-label*="Fermer" i]', // Français
+              'button[aria-label*="Cerrar" i]', // Espagnol
+              '[data-cy="share-menu-close-button"]',
+              ".modal-header-close-button",
+              "button.close-button",
+              '.share-menu-header-area button[class*="close"], .modal-header button[class*="close"]',
+              {
+                findFn: () =>
+                  Array.from(
+                    document.querySelectorAll(
+                      '.share-menu-container button, .modal-container button, .cc-modal-component button, .modal-dialog button, div[role="dialog"] button'
+                    )
+                  ).find(
+                    (btn) =>
+                      btn.offsetParent !== null &&
+                      !btn.disabled &&
+                      (/(close|fermer|cerrar|schließen)/i.test(
+                        btn.textContent || ""
+                      ) ||
+                        /(close|fermer|cerrar|schließen)/i.test(
+                          btn.getAttribute("aria-label") || ""
+                        ) ||
+                        btn.querySelector(
+                          '[class*="icon-font-chess-close"], [class*="icon-font-chess-x"], [class*="remove"], [data-icon="cross"]'
+                        ) ||
+                        (btn.firstElementChild &&
+                          btn.firstElementChild.nodeName === "SPAN" &&
+                          /x|close|remove/i.test(
+                            btn.firstElementChild.className
+                          )))
+                  ),
+              },
+            ];
+
+            const closed = await clickElementWithRetry(
+              closeButtonSelectors,
+              "chessComShareButtonAriaLabel",
+              3,
+              150
             );
-            if (closeButton) closeButton.click();
+
+            if (!closed) {
+              console.warn(
+                "[WintrChess] Failed to close share panel via button click. Trying Escape key."
+              );
+              document.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                  key: "Escape",
+                  keyCode: 27,
+                  bubbles: true,
+                  cancelable: true,
+                })
+              );
+            }
           } catch (e) {
             console.warn(
-              "[WintrChess] Non-critical error closing share panel:",
-              e
+              "[WintrChess] Non-critical error attempting to close share panel:",
+              e.message,
+              ". Trying Escape key as fallback."
+            );
+            document.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: "Escape",
+                keyCode: 27,
+                bubbles: true,
+                cancelable: true,
+              })
             );
           }
         }
