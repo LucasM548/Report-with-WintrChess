@@ -133,22 +133,6 @@
     "message": "partage,partager",
     "description": "Contenu textuel générique pour le bouton de partage sur Chess.com si l'aria-label spécifique échoue."
   },
-  "chessComShareButtonTitle": {
-    "message": "Partager",
-    "description": "Attribut title pour le bouton de partage sur Chess.com."
-  },
-  "chessComCloseButtonAriaLabel": {
-    "message": "Fermer",
-    "description": "Aria-label pour les boutons de fermeture sur les modales Chess.com."
-  },
-  "wintrchessAnalyzeButtonTexts": {
-    "message": "Analyser,Analyze,Analyze game",
-    "description": "Textes séparés par des virgules pour le bouton 'Analyser' sur WintrChess.com."
-  },
-  "descriptionShareButton": {
-    "message": "bouton de partage",
-    "description": "Description pour la fonction clickElementWithRetry."
-  },
   "descriptionPgnTab": {
     "message": "onglet PGN",
     "description": "Description pour la fonction clickElementWithRetry."

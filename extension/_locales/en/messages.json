@@ -133,22 +133,6 @@
     "message": "share",
     "description": "Generic text content for share button on Chess.com if specific aria-label fails."
   },
-  "chessComShareButtonTitle": {
-    "message": "Share",
-    "description": "Title attribute for the share button on Chess.com."
-  },
-  "chessComCloseButtonAriaLabel": {
-    "message": "Close",
-    "description": "Aria-label for close buttons on Chess.com modals."
-  },
-  "wintrchessAnalyzeButtonTexts": {
-    "message": "Analyze,Analyze game",
-    "description": "Comma-separated texts for the 'Analyze' button on WintrChess.com."
-  },
-  "descriptionShareButton": {
-    "message": "share button",
-    "description": "Description for clickElementWithRetry function."
-  },
   "descriptionPgnTab": {
     "message": "PGN tab",
     "description": "Description for clickElementWithRetry function."

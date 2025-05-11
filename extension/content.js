@@ -1131,21 +1131,21 @@
 
       (async () => {
         let shareButtonSelectors = [
-          `button[aria-label="${getMsg("chessComShareButtonAriaLabel")}"]`,
+          `button[aria-label="${["Share", "Partager", "Compartir"]}"]`,
           ".icon-font-chess.share",
           '[data-cy="share-button"]',
           "button.share-button",
           "button.game-controls-component__share",
-          `button[title="${getMsg("chessComShareButtonTitle")}"]`,
+          `button[title="${["Share", "Partager", "Compartir"]}"]`,
         ];
         if (STATE.isSlowDevice) {
           shareButtonSelectors.push({
             findFn: () =>
               Array.from(document.querySelectorAll("button")).find((btn) => {
                 const text = btn.textContent?.toLowerCase() || "";
-                return getMsg("chessComShareButtonGenericText")
-                  .split(",")
-                  .some((term) => text.includes(term.trim()));
+                return ["Share", "Partager", "Compartir"].some((term) =>
+                  text.includes(term.trim())
+                );
               }),
           });
         }
@@ -1281,9 +1281,13 @@
     );
     if (!pgnToPaste) return;
 
-    const localizedAnalyzeButtonTexts = getMsg("wintrchessAnalyzeButtonTexts")
-      .split(",")
-      .map((t) => t.trim().toLowerCase());
+    const localizedAnalyzeButtonTexts = [
+      "Analizar",
+      "Analizar partida",
+      "Analyser",
+      "Analyze",
+      "Analyze game",
+    ];
 
     const selectorsConfig = [
       {
