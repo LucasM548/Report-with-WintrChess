@@ -29,7 +29,6 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 </tr>
 </table>
 
-
 ## 🚀 Installation
 
 1. **Developer Mode Installation**:
@@ -72,8 +71,12 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 L'extension est disponible dans les langues suivantes :
 
 - Français (fr)
-- Anglais (en)
-- Espagnol (es)
+- English (en)
+- Español (es)
+- हिन्दी (hi)
+- Русский (ru)
+- Deutsch (de)
+- Italiano (it)
 
 ## 💡 Acknowledgements
 

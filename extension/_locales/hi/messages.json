@@ -1,0 +1,143 @@
+{
+  "extensionName": {
+    "message": "WintrChess के साथ मुफ्त विश्लेषण",
+    "description": "एक्सटेंशन का नाम।"
+  },
+  "extensionDescription": {
+    "message": "WintrChess के साथ Lichess/Chess.com पर अपने खेलों का मुफ्त विश्लेषण।",
+    "description": "एक्सटेंशन का विवरण।"
+  },
+  "extensionActionTitle": {
+    "message": "WintrChess विश्लेषक",
+    "description": "ब्राउज़र एक्शन बटन के लिए टूलटिप।"
+  },
+  "buttonTextAnalyzeWintrChess": {
+    "message": "WintrChess पर विश्लेषण करें",
+    "description": "मुख्य विश्लेषण बटन के लिए पाठ।"
+  },
+  "notificationPgnExtractionSlow": {
+    "message": "PGN निकाला जा रहा है (धीमा डिवाइस)...",
+    "description": "अधिसूचना संदेश।"
+  },
+  "notificationPgnExtraction": {
+    "message": "PGN निकाला जा रहा है...",
+    "description": "अधिसूचना संदेश।"
+  },
+  "notificationPgnExtractionError": {
+    "message": "PGN निकालने में त्रुटि। कृपया पुनः प्रयास करें।",
+    "description": "अधिसूचना संदेश।"
+  },
+  "notificationPgnFetchError": {
+    "message": "PGN प्राप्त नहीं किया जा सका।",
+    "description": "अधिसूचना संदेश।"
+  },
+  "notificationGenericErrorPrefix": {
+    "message": "त्रुटि: ",
+    "description": "सामान्य त्रुटि संदेशों के लिए उपसर्ग।"
+  },
+  "buttonStateRetrievingPgn": {
+    "message": "PGN प्राप्त किया जा रहा है...",
+    "description": "PGN प्राप्त होने के दौरान बटन का पाठ।"
+  },
+  "notificationWintrchessPreparingAnalysisSlow": {
+    "message": "विश्लेषण तैयार किया जा रहा है (धीमा डिवाइस)...",
+    "description": "धीमे डिवाइस पर WintrChess पेज के लिए अधिसूचना।"
+  },
+  "notificationWintrchessAutoPasteFailed": {
+    "message": "ऑटो-पेस्ट विफल। कृपया PGN मैन्युअल रूप से पेस्ट करें।",
+    "description": "WintrChess पेज के लिए अधिसूचना।"
+  },
+  "notificationWintrchessAutoPasteFailedClipboard": {
+    "message": "ऑटो-पेस्ट विफल। कृपया PGN मैन्युअल रूप से पेस्ट करें (PGN क्लिपबोर्ड पर कॉपी किया गया)।",
+    "description": "क्लिपबोर्ड जानकारी के साथ WintrChess पेज के लिए अधिसूचना।"
+  },
+  "notificationPgnExtractionSlowChessCom": {
+    "message": "PGN निकाला जा रहा है (धीमा डिवाइस), कृपया प्रतीक्षा करें...",
+    "description": "धीमे डिवाइस पर Chess.com PGN निकालने के लिए अधिसूचना संदेश।"
+  },
+  "logSlowDeviceDetected": {
+    "message": "[WintrChess] धीमा डिवाइस पाया गया। प्रदर्शन कारक: $1",
+    "description": "लॉग संदेश।",
+    "placeholders": {
+      "factor": {
+        "content": "$1",
+        "example": "2.50"
+      }
+    }
+  },
+  "logFastDeviceDetected": {
+    "message": "[WintrChess] तेज़ डिवाइस पाया गया। समय: $1ms",
+    "description": "लॉग संदेश।",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "25.00"
+      }
+    }
+  },
+  "logPgnFetchNoId": {
+    "message": "[WintrChess] PGN प्राप्त नहीं किया जा सकता: कोई गेम/अध्ययन आईडी नहीं मिली",
+    "description": "लॉग संदेश।"
+  },
+  "logPgnFromCacheLichess": {
+    "message": "[WintrChess] Lichess के लिए कैश से PGN प्राप्त किया गया",
+    "description": "लॉग संदेश।"
+  },
+  "logPgnFromCache": {
+    "message": "[WintrChess] कैश से PGN प्राप्त किया गया",
+    "description": "लॉग संदेश।"
+  },
+  "logPgnFetchApiErrorLichess": {
+    "message": "[WintrChess] Lichess API के माध्यम से PGN प्राप्त करने में त्रुटि:",
+    "description": "लॉग संदेश उपसर्ग।"
+  },
+  "logMaxAttemptsReached": {
+    "message": "[WintrChess] बटन $1 के लिए अधिकतम प्रयास पूरे हुए। लंबी देरी के बाद रीसेट किया जा रहा है।",
+    "description": "लॉग संदेश।",
+    "placeholders": {
+      "buttonId": {
+        "content": "$1",
+        "example": "chesscom_main"
+      }
+    }
+  },
+  "logSharePanelClickFailed": {
+    "message": "[WintrChess] विफल: $2 प्रयासों के बाद $1 नहीं मिला/क्लिक करने योग्य नहीं।",
+    "description": "लॉग संदेश।",
+    "placeholders": {
+      "description": { "content": "$1" },
+      "attempts": { "content": "$2" }
+    }
+  },
+  "errorSharePanelOpenFailed": {
+    "message": "शेयर पैनल खोलने में विफल",
+    "description": "त्रुटि संदेश।"
+  },
+  "errorPgnTabNotFound": {
+    "message": "PGN टैब नहीं मिला",
+    "description": "त्रुटि संदेश।"
+  },
+  "errorPgnTextareaExtractionFailed": {
+    "message": "टेक्स्टएरिया से PGN निकालने में विफल",
+    "description": "त्रुटि संदेश।"
+  },
+  "logWintrchessAutoPasteError": {
+    "message": "[WintrChess] WintrChess पर ऑटो-पेस्ट के दौरान त्रुटि:",
+    "description": "लॉग संदेश उपसर्ग।"
+  },
+  "chessComShareButtonAriaLabel": {
+    "message": "शेयर करें",
+    "description": "Chess.com पर शेयर बटन के लिए Aria-label।"
+  },
+  "descriptionPgnTab": {
+    "message": "PGN टैब",
+    "description": "clickElementWithRetry फ़ंक्शन के लिए विवरण।"
+  },
+  "logRetryingInMs": {
+    "message": "[WintrChess] $1ms में पुनः प्रयास किया जा रहा है",
+    "description": "पुनः प्रयास के लिए लॉग संदेश।",
+    "placeholders": {
+      "waitTime": { "content": "$1" }
+    }
+  }
+}

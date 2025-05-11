@@ -26,6 +26,24 @@
         return messageKey;
       }
     },
+    getElementInnerText: (element) => {
+      if (!element) return "";
+      let text = "";
+      if (element.childNodes && element.childNodes.length > 0) {
+        for (const child of element.childNodes) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            text += child.textContent;
+          } else if (child.nodeType === Node.ELEMENT_NODE) {
+            if (child.tagName !== "SCRIPT" && child.tagName !== "STYLE") {
+              text += Utils.getElementInnerText(child);
+            }
+          }
+        }
+      } else if (element.textContent) {
+        text = element.textContent;
+      }
+      return text.trim().replace(/\s+/g, " ");
+    },
   };
 
   const CHESS_ICON_SVG = `<svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -45,11 +63,17 @@
     DEBOUNCE_DELAY: 500,
     SLOW_DEVICE_THRESHOLD: 50,
     BUTTON_SELECTORS: {
-      REVIEW_TERMS: ["bilan", "review", "analysis", "analyser", "analyze"],
+      REVIEW_TERMS: [
+        "Game Review", // English
+        "Отчет о партии", // Russian
+        "Bilan de la partie", // French
+        "Partieanalyse", // German
+        "Revisión de partida", // Spanish
+        "खेल की समीक्षा", // Hindi
+      ],
       SHARED: [
-        // Applied to Chess.com
         {
-          selector: ".game-over-modal-content", // Specifically for game over modal button
+          selector: ".game-over-modal-content",
           method: "append",
           priority: 20,
         },
@@ -77,7 +101,7 @@
   // --- STATE ---
   const STATE = {
     isBaseInitialized: false,
-    platform: null, // 'lichess', 'chess.com', 'wintrchess'
+    platform: null,
     domObserver: null,
     buttonInstances: new Map(),
     isSlowDevice: false,
@@ -144,6 +168,10 @@
     if (STATE.isBaseInitialized) return;
     if (!CONFIG.BUTTON_TEXT) {
       CONFIG.BUTTON_TEXT = Utils.getMsg(CONFIG.BUTTON_TEXT_KEY);
+    }
+    if (CONFIG.BUTTON_SELECTORS.REVIEW_TERMS_LOWERCASE === undefined) {
+      CONFIG.BUTTON_SELECTORS.REVIEW_TERMS_LOWERCASE =
+        CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.map((term) => term.toLowerCase());
     }
     STATE.isBaseInitialized = true;
   }
@@ -246,14 +274,12 @@
 
     if (pathParts.length > 0) {
       if (gameIdRegex.test(pathParts[0]) && pathParts[0] !== "study") {
-        // Game or analysis of a game
         isRelevantPage = true;
         gameId = pathParts[0];
       } else if (pathParts[0] === "study" && pathParts.length >= 2) {
         isRelevantPage = true;
         studyId = pathParts[1];
       } else if (pathParts[0] === "analysis" && !pathParts[1]) {
-        // Generic analysis board
         isRelevantPage = true;
       }
     }
@@ -304,6 +330,7 @@
         "modal-header-header",
         "sidebar-component",
         "board-layout-sidebar",
+        "layout-column-two",
       ],
     },
     relevantNodeNames: new Set(["chess-board", "vertical-move-list"]),
@@ -540,7 +567,6 @@
         STATE.isSlowDevice ? 8000 : 4000
       );
 
-      // Give UI time to settle, especially on slow devices
       if (STATE.isSlowDevice) await Utils.sleep(1000 * STATE.performanceFactor);
 
       try {
@@ -636,19 +662,16 @@
       let sharePanelOpened = false;
       try {
         const shareButtonSelectors = [
-          'button[aria-label*="Share"], button[aria-label*="Partager"], button[aria-label*="Compartir"]',
           ".icon-font-chess.share",
-          '[data-cy="share-button"]',
-          "button.share-button",
-          "button.game-controls-component__share",
           {
             findFn: () =>
               Array.from(
                 document.querySelectorAll("button, div[role='button']")
               ).find(
                 (btn) =>
-                  /share|partager|compartir/i.test(btn.textContent) &&
-                  !/shared game/i.test(btn.textContent)
+                  /share|partager|compartir/i.test(
+                    Utils.getElementInnerText(btn)
+                  ) && !/shared game/i.test(Utils.getElementInnerText(btn))
               ),
           },
         ];
@@ -667,15 +690,17 @@
 
         const pgnTabSelectors = [
           'button#tab-pgn[aria-controls="tabpanel-pgn"]',
-          'button.cc-tab-item-component[aria-controls="tabpanel-pgn"]',
-          'button[id*="pgn" i], button[aria-controls*="pgn" i]',
           {
             findFn: () =>
               Array.from(
                 document.querySelectorAll(
                   ".share-menu-tab button, .cc-tabs-component button, .modal-tabs button, nav.tabs button, .tabs-component button"
                 )
-              ).find((btn) => btn.textContent?.toUpperCase().includes("PGN")),
+              ).find((btn) =>
+                (Utils.getElementInnerText(btn) || "")
+                  .toUpperCase()
+                  .includes("PGN")
+              ),
           },
         ];
         if (
@@ -697,15 +722,7 @@
         if (sharePanelOpened) {
           try {
             const closeButtonSelectors = [
-              "button.cc-modal-header-close",
-              ".share-menu-close",
-              'button[aria-label*="Close" i]', // Anglais
-              'button[aria-label*="Fermer" i]', // Français
-              'button[aria-label*="Cerrar" i]', // Espagnol
               '[data-cy="share-menu-close-button"]',
-              ".modal-header-close-button",
-              "button.close-button",
-              '.share-menu-header-area button[class*="close"], .modal-header button[class*="close"]',
               {
                 findFn: () =>
                   Array.from(
@@ -717,7 +734,7 @@
                       btn.offsetParent !== null &&
                       !btn.disabled &&
                       (/(close|fermer|cerrar|schließen)/i.test(
-                        btn.textContent || ""
+                        Utils.getElementInnerText(btn) || ""
                       ) ||
                         /(close|fermer|cerrar|schließen)/i.test(
                           btn.getAttribute("aria-label") || ""
@@ -736,7 +753,7 @@
 
             const closed = await clickElementWithRetry(
               closeButtonSelectors,
-              "chessComShareButtonAriaLabel",
+              "chessComCloseButtonAriaLabel",
               3,
               150
             );
@@ -779,9 +796,8 @@
     create(options) {
       const { className, style, innerHTML, onClick } = options;
       const button = document.createElement("button");
-      button.className = className; // Base class set by config
+      button.className = className;
       if (!className.includes("wintchess-aurora-button")) {
-        // Add generic class if not Aurora
         button.classList.add("wintchess-button");
       }
 
@@ -798,14 +814,14 @@
         if (button.disabled) return;
 
         button.disabled = true;
-        ensureBaseInitialized(); // Ensure messages are loaded
+        ensureBaseInitialized();
 
         const textElement = button.querySelector(".button-text") || button;
-        const originalText = textElement.textContent;
+        const originalText = Utils.getElementInnerText(textElement);
         textElement.textContent = Utils.getMsg("buttonStateRetrievingPgn");
 
         try {
-          const pgn = await onClickHandler(); // This is PgnExtractor.fromLichess or fromChessCom
+          const pgn = await onClickHandler();
           if (pgn) {
             await chromeStorage.setValue(CONFIG.PGN_STORAGE_KEY, pgn);
             chrome.runtime.sendMessage({
@@ -818,16 +834,9 @@
             !getLichessPageInfo().gameId &&
             !getLichessPageInfo().studyId
           ) {
-            NotificationManager.show(
-              Utils.getMsg("notificationPgnFetchError"),
-              4000
-            );
           }
         } catch (error) {
           console.error("[WintrChess] Error on button click:", error);
-          // Error specific notifications are shown in PgnExtractor methods usually
-          // If not, a generic one can be shown here, but it's often redundant.
-          // NotificationManager.show(Utils.getMsg("notificationGenericErrorPrefix") + (error.message || Utils.getMsg("notificationPgnFetchError")), 5000);
         } finally {
           setTimeout(() => {
             if (button && button.isConnected) {
@@ -937,7 +946,7 @@
           console.warn(Utils.getMsg("logMaxAttemptsReached", id));
           setTimeout(
             () => retryFn(0),
-            CONFIG.LONG_RETRY_DELAY * 2 * STATE.performanceFactor
+            CONFIG.LONG_RETRY_DELAY * 3 * STATE.performanceFactor
           );
         }
         return false;
@@ -947,10 +956,6 @@
         const sortedTargets = [...targets].sort(
           (a, b) => (b.priority || 0) - (a.priority || 0)
         );
-        const buttonSelectorClass =
-          STATE.platform === "lichess"
-            ? ".wintchess-aurora-button"
-            : ".wintchess-button";
 
         for (const targetConfig of sortedTargets) {
           const {
@@ -963,15 +968,15 @@
           if (predefinedElement && document.contains(predefinedElement)) {
             anchorElement = predefinedElement;
           } else if (typeof selector === "string") {
-            anchorElement =
-              Array.from(document.querySelectorAll(selector)).find(
-                (el) => el.offsetParent !== null
-              ) || document.querySelector(selector);
+            anchorElement = Array.from(
+              document.querySelectorAll(selector)
+            ).find((el) => el.offsetParent !== null);
+            if (!anchorElement)
+              anchorElement = document.querySelector(selector);
           }
 
           if (!anchorElement) continue;
 
-          // Check if a WintrChess button already exists relative to this anchor
           const containerToCheck =
             method === "append" || method === "prepend"
               ? anchorElement
@@ -979,36 +984,46 @@
           if (!containerToCheck) continue;
 
           let existingButtonFound = false;
+          const wintchessButtonSelector =
+            ".wintchess-button, .wintchess-aurora-button";
+          const wintchessContainerSelector = ".wintchess-button-container";
+
           if (
-            method === "append" &&
             containerToCheck.querySelector(
-              `:scope > ${buttonSelectorClass}, :scope > .wintchess-button-container > ${buttonSelectorClass}`
+              `:scope > ${wintchessButtonSelector}, :scope > ${wintchessContainerSelector}`
             )
           ) {
             existingButtonFound = true;
           } else if (
             (method === "after" || method === "afterend") &&
             anchorElement.nextElementSibling &&
-            (anchorElement.nextElementSibling.matches(buttonSelectorClass) ||
-              anchorElement.nextElementSibling.querySelector(
-                buttonSelectorClass
+            (anchorElement.nextElementSibling.matches(
+              wintchessButtonSelector
+            ) ||
+              anchorElement.nextElementSibling.matches(
+                wintchessContainerSelector
               ) ||
-              (anchorElement.nextElementSibling.classList.contains(
-                "wintchess-button-container"
-              ) &&
-                anchorElement.nextElementSibling.querySelector(
-                  buttonSelectorClass
-                )))
+              anchorElement.nextElementSibling.querySelector(
+                wintchessButtonSelector
+              ))
           ) {
             existingButtonFound = true;
           } else if (
-            method === "prepend" &&
-            containerToCheck.querySelector(
-              `:scope > ${buttonSelectorClass}, :scope > .wintchess-button-container > ${buttonSelectorClass}`
-            )
+            (method === "before" || method === "beforebegin") &&
+            anchorElement.previousElementSibling &&
+            (anchorElement.previousElementSibling.matches(
+              wintchessButtonSelector
+            ) ||
+              anchorElement.previousElementSibling.matches(
+                wintchessContainerSelector
+              ) ||
+              anchorElement.previousElementSibling.querySelector(
+                wintchessButtonSelector
+              ))
           ) {
             existingButtonFound = true;
           }
+
           if (existingButtonFound && id !== "chesscom_gameover_modal") {
             const currentInstance = STATE.buttonInstances.get(id);
             if (
@@ -1016,20 +1031,27 @@
               currentInstance.button &&
               currentInstance.button.isConnected
             ) {
-              // console.log(`[WintrChess] Button ${id} already exists at target via selector ${selector}.`);
               return true;
             }
-            // console.log(`[WintrChess] Another button exists or button ${id} not managed at target ${selector}. Skipping.`);
             continue;
           }
 
           try {
             let finalButtonContainer = button;
             if (id === "chesscom_gameover_modal") {
-              finalButtonContainer = document.createElement("div");
-              finalButtonContainer.className =
-                "wintchess-button-container game-over-review-button-component";
-              finalButtonContainer.appendChild(button);
+              let container = anchorElement.querySelector(
+                ".wintchess-button-container.game-over-review-button-component"
+              );
+              if (!container) {
+                container = document.createElement("div");
+                container.className =
+                  "wintchess-button-container game-over-review-button-component";
+              } else {
+                while (container.firstChild)
+                  container.removeChild(container.firstChild);
+              }
+              container.appendChild(button);
+              finalButtonContainer = container;
             }
 
             if (method === "append")
@@ -1044,7 +1066,10 @@
               anchorElement.insertAdjacentElement(method, finalButtonContainer);
 
             STATE.buttonInstances.set(id, {
-              button: finalButtonContainer,
+              button: finalButtonContainer.matches(wintchessButtonSelector)
+                ? finalButtonContainer
+                : finalButtonContainer.querySelector(wintchessButtonSelector) ||
+                  finalButtonContainer,
               element: anchorElement,
               method,
             });
@@ -1081,16 +1106,27 @@
 
       removeButtonById(id) {
         const instance = STATE.buttonInstances.get(id);
-        if (instance && instance.button && instance.button.parentNode) {
-          instance.button.parentNode.removeChild(instance.button);
+        if (instance && instance.button) {
+          const buttonElement = instance.button.matches(
+            ".wintchess-button-container"
+          )
+            ? instance.button
+            : instance.button.closest(".wintchess-button-container") ||
+              instance.button;
+          if (buttonElement && buttonElement.parentNode) {
+            buttonElement.parentNode.removeChild(buttonElement);
+          }
         }
         STATE.buttonInstances.delete(id);
       },
 
       removeAllButtons() {
         STATE.buttonInstances.forEach(({ button }) => {
-          if (button && button.parentNode) {
-            button.parentNode.removeChild(button);
+          const buttonElement = button.matches(".wintchess-button-container")
+            ? button
+            : button.closest(".wintchess-button-container") || button;
+          if (buttonElement && buttonElement.parentNode) {
+            buttonElement.parentNode.removeChild(buttonElement);
           }
         });
         STATE.buttonInstances.clear();
@@ -1102,22 +1138,15 @@
     ensureBaseInitialized();
 
     if (platform === "chess.com") {
-      const pageInfo = getChessComPageInfo();
-      if (
-        pageInfo.isReviewPage &&
-        !document.querySelector(".game-over-modal-content")
-      ) {
-        ButtonManager.removeAllButtons();
-        return false;
-      }
       if (tryAddButtonToChessComGameOverModal()) {
-        return true;
       }
+
       if (
         STATE.buttonInstances.has("chesscom_gameover_modal") &&
         !document.querySelector(
           ".game-over-modal-content .wintchess-button-container"
-        )
+        ) &&
+        !document.querySelector(".game-over-modal-content .wintchess-button")
       ) {
         ButtonManager.removeButtonById("chesscom_gameover_modal");
       }
@@ -1131,17 +1160,17 @@
       if (gameReviewButton && gameReviewButton.parentNode) {
         targets = [
           { element: gameReviewButton, method: "afterend", priority: 100 },
-          ...targets,
+          ...targets.filter(
+            (t) =>
+              !gameReviewButton.closest(t.selector) &&
+              t.selector !== ".game-over-modal-content"
+          ),
         ];
+      } else {
+        targets = targets.filter(
+          (t) => t.selector !== ".game-over-modal-content"
+        );
       }
-    }
-
-    // Filter out game-over-modal-content selector for general chess.com button
-    // to prevent adding the standard button inside the modal.
-    if (platform === "chess.com") {
-      targets = targets.filter(
-        (t) => t.selector !== ".game-over-modal-content"
-      );
     }
 
     return ButtonManager.addButton({
@@ -1154,7 +1183,6 @@
   }
 
   function tryAddButtonToChessComGameOverModal() {
-    // This function is Chess.com specific
     if (STATE.platform !== "chess.com") return false;
     ensureBaseInitialized();
 
@@ -1162,46 +1190,31 @@
     if (!modalContent) return false;
 
     const buttonId = "chesscom_gameover_modal";
+
+    const existingInstance = STATE.buttonInstances.get(buttonId);
     if (
-      modalContent.querySelector(
-        ".wintchess-button-container.game-over-review-button-component .wintchess-button"
-      )
+      existingInstance &&
+      existingInstance.button &&
+      existingInstance.button.isConnected
     ) {
-      if (!STATE.buttonInstances.has(buttonId)) {
-        const btnInstance = modalContent.querySelector(
-          ".wintchess-button-container.game-over-review-button-component"
-        );
-        if (btnInstance) {
-          STATE.buttonInstances.set(buttonId, {
-            button: btnInstance,
-            element:
-              modalContent.querySelector(".game-over-modal-buttons") ||
-              modalContent,
-            method: "append",
-          });
-        }
-      }
       return true;
     }
 
     const buttonList = modalContent.querySelector(".game-over-modal-buttons");
     if (!buttonList) return false;
 
-    const targets = [
-      {
-        element: buttonList,
-        method: "append",
-        priority: 100,
-      },
-    ];
+    const targets = [{ element: buttonList, method: "append", priority: 100 }];
 
-    // Find the "Review Game" button to insert after, if possible and desired.
-    // This example will append to buttonList as per `targets` above.
-    // If you want to insert relative to "Review Game" button:
-    // const reviewGameButton = buttonList.querySelector(".game-over-review-button-component");
-    // if (reviewGameButton) {
-    //    targets = [{ element: reviewGameButton, method: "afterend", priority: 100 }];
-    // }
+    if (
+      !document.querySelector(
+        targets[0].element.tagName.toLowerCase() +
+          (targets[0].element.className
+            ? "." + targets[0].element.className.trim().split(/\s+/).join(".")
+            : "")
+      )
+    ) {
+      targets.push({ element: modalContent, method: "append", priority: 90 });
+    }
 
     return ButtonManager.addButton({
       id: buttonId,
@@ -1209,51 +1222,79 @@
       targets: targets,
       attempts: 0,
       retryFn: (newAttempts) => {
-        if (newAttempts < 2) tryAddButtonToChessComGameOverModal();
+        if (newAttempts < 3) tryAddButtonToChessComGameOverModal();
       },
       checkExisting: true,
     });
   }
 
   function findChessComGameReviewButton() {
-    // Find Chess.com's native "Game Review" / "Bilan de la partie" button
-    const reviewTerms = CONFIG.BUTTON_SELECTORS.REVIEW_TERMS;
-    const selectors = [
-      ".game-over-buttons .game-over-review-button-component button", // Game Over screen
-      ".board-layout-sidebar .review-button-component button", // Analysis sidebar
-      ".game-review-buttons-component > button.cc-button-component.cc-button-primary",
-      ".sidebar-buttons-container button.ui_v5-button-component.primary",
-      "button.cc-button-component.cc-button-primary.cc-button-xx-large",
-      "button.cc-button-component.cc-button-primary",
+    ensureBaseInitialized();
+    const reviewTermsLowercase = CONFIG.BUTTON_SELECTORS.REVIEW_TERMS_LOWERCASE;
+
+    const containerSelectors = [
+      ".board-layout-sidebar",
+      ".sidebar-component",
+      ".layout-column-two",
+      ".game-controls-component",
+      ".analysis-controls-component",
+      ".post-game-controls-component",
     ];
 
-    for (const selector of selectors) {
-      const buttons = document.querySelectorAll(selector);
-      for (const btn of buttons) {
-        if (
-          btn.classList.contains("wintchess-button") ||
-          btn.closest(".wintchess-aurora-button")
-        )
-          continue;
+    const specificButtonSelectors = [
+      ".review-button-component button",
+      ".game-review-buttons-component > button.cc-button-component.cc-button-primary",
+    ];
 
-        const btnText = (btn.textContent || "").toLowerCase().trim();
-        const ariaLabel = (btn.getAttribute("aria-label") || "")
-          .toLowerCase()
-          .trim();
-        if (
-          reviewTerms.some(
-            (term) => btnText.includes(term) || ariaLabel.includes(term)
-          )
-        ) {
-          if (
-            !btnText.includes("new game") &&
-            !btnText.includes("nouvelle partie")
-          ) {
-            if (btn.offsetParent !== null) return btn;
-          }
+    let candidateButtons = [];
+
+    for (const selector of specificButtonSelectors) {
+      document
+        .querySelectorAll(selector)
+        .forEach((btn) => candidateButtons.push(btn));
+    }
+
+    for (const containerSelector of containerSelectors) {
+      const container = document.querySelector(containerSelector);
+      if (container) {
+        container
+          .querySelectorAll("button, [role='button']")
+          .forEach((btn) => candidateButtons.push(btn));
+      }
+    }
+
+    candidateButtons = [...new Set(candidateButtons)];
+
+    for (const btn of candidateButtons) {
+      if (
+        btn.classList.contains("wintchess-button") ||
+        btn.closest(
+          ".wintchess-aurora-button, .wintchess-button-container, .wintchess-button"
+        )
+      ) {
+        continue;
+      }
+      if (btn.offsetParent === null || btn.disabled) {
+        continue;
+      }
+
+      const btnFullText = Utils.getElementInnerText(btn).toLowerCase();
+      const ariaLabel = (btn.getAttribute("aria-label") || "")
+        .toLowerCase()
+        .trim();
+
+      const isReviewButton = reviewTermsLowercase.some(
+        (term) => btnFullText.includes(term) || ariaLabel.includes(term)
+      );
+
+      if (isReviewButton) {
+        if (btnFullText.length > 3 || ariaLabel.length > 3) {
+          // console.log("[WintrChess] Found potential Game Review button:", btn, "Text:", btnFullText);
+          return btn;
         }
       }
     }
+    // console.log("[WintrChess] Game Review button not found with current strategy.");
     return null;
   }
 
@@ -1275,30 +1316,14 @@
     );
     if (!pgnToPaste) return;
 
-    const localizedAnalyzeButtonTexts = [
-      "Analizar",
-      "Analizar partida",
-      "Analyser",
-      "Analyze",
-      "Analyze game",
-    ];
+    ensureBaseInitialized();
+
     const selectorsConfig = [
       {
         textarea: "textarea.TerVPsT9aZ0soO8yjZU4",
         button: "button.rHBNQrpvd7mwKp3HqjVQ.THArhyJIfuOy42flULV6",
-        priority: 3,
       },
-      {
-        textarea: 'textarea[placeholder*="PGN"]',
-        buttonText: localizedAnalyzeButtonTexts,
-        priority: 2,
-      },
-      {
-        textarea: "textarea",
-        buttonText: localizedAnalyzeButtonTexts,
-        priority: 1,
-      },
-    ].sort((a, b) => b.priority - a.priority);
+    ];
 
     let attempts = 0;
     const maxAttempts = STATE.isSlowDevice ? 45 : 30;
@@ -1306,27 +1331,42 @@
 
     const findWintrChessElements = () => {
       for (const sel of selectorsConfig) {
-        const textarea = document.querySelector(sel.textarea);
-        if (!textarea || textarea.offsetParent === null) continue;
+        const textareas = document.querySelectorAll(sel.textarea);
+        for (const textarea of textareas) {
+          if (!textarea || textarea.offsetParent === null) continue;
 
-        let button = null;
-        if (sel.button) {
-          button = document.querySelector(sel.button);
-        } else if (sel.buttonText) {
-          button = Array.from(
-            document.querySelectorAll("button:not([disabled])")
-          ).find(
-            (btn) =>
-              sel.buttonText.some((txt) =>
-                btn.textContent
-                  ?.toLowerCase()
-                  .trim()
-                  .includes(txt.toLowerCase())
-              ) && btn.offsetParent !== null
-          );
+          let button = null;
+          if (sel.button) {
+            button = document.querySelector(sel.button);
+          } else if (sel.buttonText && Array.isArray(sel.buttonText)) {
+            const commonParent = textarea.closest("form") || document.body;
+            button = Array.from(
+              commonParent.querySelectorAll("button:not([disabled])")
+            ).find(
+              (btn) =>
+                sel.buttonText.some((txt) =>
+                  (Utils.getElementInnerText(btn) || "")
+                    .toLowerCase()
+                    .includes(txt)
+                ) && btn.offsetParent !== null
+            );
+            if (!button) {
+              button = Array.from(
+                document.querySelectorAll("button:not([disabled])")
+              ).find(
+                (btn) =>
+                  sel.buttonText.some((txt) =>
+                    (Utils.getElementInnerText(btn) || "")
+                      .toLowerCase()
+                      .includes(txt)
+                  ) && btn.offsetParent !== null
+              );
+            }
+          }
+          if (button && button.offsetParent !== null && !button.disabled) {
+            return { textarea, button };
+          }
         }
-        if (button && button.offsetParent !== null && !button.disabled)
-          return { textarea, button };
       }
       return null;
     };
@@ -1334,6 +1374,8 @@
     const performPasteAndClick = async (textarea, button) => {
       try {
         textarea.focus();
+        textarea.value = "";
+        await Utils.sleep(50 * STATE.performanceFactor);
         textarea.value = pgnToPaste;
         textarea.dispatchEvent(
           new Event("input", { bubbles: true, cancelable: true })
@@ -1378,16 +1420,12 @@
 
       attempts++;
       if (attempts >= maxAttempts) {
-        NotificationManager.show(
-          Utils.getMsg("notificationWintrchessAutoPasteFailed"),
-          5000
-        );
+        let failMessage = Utils.getMsg("notificationWintrchessAutoPasteFailed");
         if (navigator.clipboard && pgnToPaste) {
           try {
             await navigator.clipboard.writeText(pgnToPaste);
-            NotificationManager.show(
-              Utils.getMsg("notificationWintrchessAutoPasteFailedClipboard"),
-              6000
+            failMessage = Utils.getMsg(
+              "notificationWintrchessAutoPasteFailedClipboard"
             );
           } catch (clipError) {
             console.error(
@@ -1396,6 +1434,7 @@
             );
           }
         }
+        NotificationManager.show(failMessage, 6000);
         await chromeStorage
           .deleteValue(CONFIG.PGN_STORAGE_KEY)
           .catch((e) =>
@@ -1417,8 +1456,8 @@
     );
   }
 
-  // --- CHROME MESSAGE LISTENER (e.g., for icon click) ---
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // --- CHROME MESSAGE LISTENER ---
+  chrome.runtime.onMessage.addListener((request, sendResponse) => {
     if (request.action === "extractPgnFromIconClick") {
       (async () => {
         try {

@@ -1,0 +1,143 @@
+{
+  "extensionName": {
+    "message": "Бесплатный анализ с WintrChess",
+    "description": "Название расширения."
+  },
+  "extensionDescription": {
+    "message": "Бесплатный анализ ваших партий на Lichess/Chess.com с помощью WintrChess.",
+    "description": "Описание расширения."
+  },
+  "extensionActionTitle": {
+    "message": "Анализатор WintrChess",
+    "description": "Подсказка для кнопки действия браузера."
+  },
+  "buttonTextAnalyzeWintrChess": {
+    "message": "Анализировать на WintrChess",
+    "description": "Текст для основной кнопки анализа."
+  },
+  "notificationPgnExtractionSlow": {
+    "message": "Извлечение PGN (медленное устройство)...",
+    "description": "Сообщение уведомления."
+  },
+  "notificationPgnExtraction": {
+    "message": "Извлечение PGN...",
+    "description": "Сообщение уведомления."
+  },
+  "notificationPgnExtractionError": {
+    "message": "Ошибка извлечения PGN. Пожалуйста, попробуйте еще раз.",
+    "description": "Сообщение уведомления."
+  },
+  "notificationPgnFetchError": {
+    "message": "Не удалось получить PGN.",
+    "description": "Сообщение уведомления."
+  },
+  "notificationGenericErrorPrefix": {
+    "message": "Ошибка: ",
+    "description": "Префикс для общих сообщений об ошибках."
+  },
+  "buttonStateRetrievingPgn": {
+    "message": "Получение PGN...",
+    "description": "Текст кнопки во время получения PGN."
+  },
+  "notificationWintrchessPreparingAnalysisSlow": {
+    "message": "Подготовка анализа (медленное устройство)...",
+    "description": "Уведомление для страницы WintrChess на медленных устройствах."
+  },
+  "notificationWintrchessAutoPasteFailed": {
+    "message": "Автоматическая вставка не удалась. Пожалуйста, вставьте PGN вручную.",
+    "description": "Уведомление для страницы WintrChess."
+  },
+  "notificationWintrchessAutoPasteFailedClipboard": {
+    "message": "Автоматическая вставка не удалась. Пожалуйста, вставьте PGN вручную (PGN скопирован в буфер обмена).",
+    "description": "Уведомление для страницы WintrChess с информацией о буфере обмена."
+  },
+  "notificationPgnExtractionSlowChessCom": {
+    "message": "Извлечение PGN (медленное устройство), пожалуйста, подождите...",
+    "description": "Сообщение уведомления для извлечения PGN Chess.com на медленном устройстве."
+  },
+  "logSlowDeviceDetected": {
+    "message": "[WintrChess] Обнаружено медленное устройство. Фактор производительности: $1",
+    "description": "Сообщение лога.",
+    "placeholders": {
+      "factor": {
+        "content": "$1",
+        "example": "2.50"
+      }
+    }
+  },
+  "logFastDeviceDetected": {
+    "message": "[WintrChess] Обнаружено быстрое устройство. Время: $1мс",
+    "description": "Сообщение лога.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "25.00"
+      }
+    }
+  },
+  "logPgnFetchNoId": {
+    "message": "[WintrChess] Не удается получить PGN: идентификатор партии/этюда не обнаружен",
+    "description": "Сообщение лога."
+  },
+  "logPgnFromCacheLichess": {
+    "message": "[WintrChess] PGN получен из кеша для Lichess",
+    "description": "Сообщение лога."
+  },
+  "logPgnFromCache": {
+    "message": "[WintrChess] PGN получен из кеша",
+    "description": "Сообщение лога."
+  },
+  "logPgnFetchApiErrorLichess": {
+    "message": "[WintrChess] Ошибка получения PGN через API Lichess:",
+    "description": "Префикс сообщения лога."
+  },
+  "logMaxAttemptsReached": {
+    "message": "[WintrChess] Достигнуто максимальное количество попыток для кнопки $1. Сброс после длительной задержки.",
+    "description": "Сообщение лога.",
+    "placeholders": {
+      "buttonId": {
+        "content": "$1",
+        "example": "chesscom_main"
+      }
+    }
+  },
+  "logSharePanelClickFailed": {
+    "message": "[WintrChess] Ошибка: $1 не найден/не кликабелен после $2 попыток.",
+    "description": "Сообщение лога.",
+    "placeholders": {
+      "description": { "content": "$1" },
+      "attempts": { "content": "$2" }
+    }
+  },
+  "errorSharePanelOpenFailed": {
+    "message": "Не удалось открыть панель «Поделиться»",
+    "description": "Сообщение об ошибке."
+  },
+  "errorPgnTabNotFound": {
+    "message": "Вкладка PGN не найдена",
+    "description": "Сообщение об ошибке."
+  },
+  "errorPgnTextareaExtractionFailed": {
+    "message": "Не удалось извлечь PGN из текстового поля",
+    "description": "Сообщение об ошибке."
+  },
+  "logWintrchessAutoPasteError": {
+    "message": "[WintrChess] Ошибка во время автоматической вставки на WintrChess:",
+    "description": "Префикс сообщения лога."
+  },
+  "chessComShareButtonAriaLabel": {
+    "message": "Поделиться",
+    "description": "Aria-label для кнопки «Поделиться» на Chess.com."
+  },
+  "descriptionPgnTab": {
+    "message": "вкладка PGN",
+    "description": "Описание для функции clickElementWithRetry."
+  },
+  "logRetryingInMs": {
+    "message": "[WintrChess] Повторная попытка через $1мс",
+    "description": "Сообщение лога для повторных попыток.",
+    "placeholders": {
+      "waitTime": { "content": "$1" }
+    }
+  }
+}

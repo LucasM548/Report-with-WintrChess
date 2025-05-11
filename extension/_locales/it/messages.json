@@ -1,0 +1,143 @@
+{
+  "extensionName": {
+    "message": "Analisi Gratuita con WintrChess",
+    "description": "Il nome dell'estensione."
+  },
+  "extensionDescription": {
+    "message": "Analisi gratuita delle tue partite su Lichess/Chess.com con WintrChess.",
+    "description": "Descrizione dell'estensione."
+  },
+  "extensionActionTitle": {
+    "message": "Analizzatore WintrChess",
+    "description": "Tooltip per il pulsante di azione del browser."
+  },
+  "buttonTextAnalyzeWintrChess": {
+    "message": "Analizza su WintrChess",
+    "description": "Testo per il pulsante di analisi principale."
+  },
+  "notificationPgnExtractionSlow": {
+    "message": "Estrazione PGN in corso (dispositivo lento)...",
+    "description": "Messaggio di notifica."
+  },
+  "notificationPgnExtraction": {
+    "message": "Estrazione PGN in corso...",
+    "description": "Messaggio di notifica."
+  },
+  "notificationPgnExtractionError": {
+    "message": "Errore durante l'estrazione del PGN. Riprova.",
+    "description": "Messaggio di notifica."
+  },
+  "notificationPgnFetchError": {
+    "message": "Impossibile recuperare il PGN.",
+    "description": "Messaggio di notifica."
+  },
+  "notificationGenericErrorPrefix": {
+    "message": "Errore: ",
+    "description": "Prefisso per messaggi di errore generici."
+  },
+  "buttonStateRetrievingPgn": {
+    "message": "Recupero PGN...",
+    "description": "Testo del pulsante durante il recupero del PGN."
+  },
+  "notificationWintrchessPreparingAnalysisSlow": {
+    "message": "Preparazione analisi (dispositivo lento)...",
+    "description": "Notifica per la pagina WintrChess su dispositivi lenti."
+  },
+  "notificationWintrchessAutoPasteFailed": {
+    "message": "Incolla automatico fallito. Incolla il PGN manualmente.",
+    "description": "Notifica per la pagina WintrChess."
+  },
+  "notificationWintrchessAutoPasteFailedClipboard": {
+    "message": "Incolla automatico fallito. Incolla il PGN manualmente (PGN copiato negli appunti).",
+    "description": "Notifica per la pagina WintrChess con informazioni sugli appunti."
+  },
+  "notificationPgnExtractionSlowChessCom": {
+    "message": "Estrazione PGN (dispositivo lento), attendere prego...",
+    "description": "Messaggio di notifica per l'estrazione PGN di Chess.com su dispositivo lento."
+  },
+  "logSlowDeviceDetected": {
+    "message": "[WintrChess] Rilevato dispositivo lento. Fattore di prestazione: $1",
+    "description": "Messaggio di log.",
+    "placeholders": {
+      "factor": {
+        "content": "$1",
+        "example": "2.50"
+      }
+    }
+  },
+  "logFastDeviceDetected": {
+    "message": "[WintrChess] Rilevato dispositivo veloce. Tempo: $1ms",
+    "description": "Messaggio di log.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "25.00"
+      }
+    }
+  },
+  "logPgnFetchNoId": {
+    "message": "[WintrChess] Impossibile recuperare PGN: ID partita/studio non rilevato",
+    "description": "Messaggio di log."
+  },
+  "logPgnFromCacheLichess": {
+    "message": "[WintrChess] PGN recuperato dalla cache per Lichess",
+    "description": "Messaggio di log."
+  },
+  "logPgnFromCache": {
+    "message": "[WintrChess] PGN recuperato dalla cache",
+    "description": "Messaggio di log."
+  },
+  "logPgnFetchApiErrorLichess": {
+    "message": "[WintrChess] Errore nel recupero PGN tramite API Lichess:",
+    "description": "Prefisso del messaggio di log."
+  },
+  "logMaxAttemptsReached": {
+    "message": "[WintrChess] Numero massimo di tentativi raggiunto per il pulsante $1. Reset dopo un lungo ritardo.",
+    "description": "Messaggio di log.",
+    "placeholders": {
+      "buttonId": {
+        "content": "$1",
+        "example": "chesscom_main"
+      }
+    }
+  },
+  "logSharePanelClickFailed": {
+    "message": "[WintrChess] Fallito: $1 non trovato/cliccabile dopo $2 tentativi.",
+    "description": "Messaggio di log.",
+    "placeholders": {
+      "description": { "content": "$1" },
+      "attempts": { "content": "$2" }
+    }
+  },
+  "errorSharePanelOpenFailed": {
+    "message": "Impossibile aprire il pannello di condivisione",
+    "description": "Messaggio di errore."
+  },
+  "errorPgnTabNotFound": {
+    "message": "Scheda PGN non trovata",
+    "description": "Messaggio di errore."
+  },
+  "errorPgnTextareaExtractionFailed": {
+    "message": "Impossibile estrarre PGN dall'area di testo",
+    "description": "Messaggio di errore."
+  },
+  "logWintrchessAutoPasteError": {
+    "message": "[WintrChess] Errore durante l'incolla automatico su WintrChess:",
+    "description": "Prefisso del messaggio di log."
+  },
+  "chessComShareButtonAriaLabel": {
+    "message": "Condividi",
+    "description": "Aria-label per il pulsante di condivisione su Chess.com."
+  },
+  "descriptionPgnTab": {
+    "message": "scheda PGN",
+    "description": "Descrizione per la funzione clickElementWithRetry."
+  },
+  "logRetryingInMs": {
+    "message": "[WintrChess] Nuovo tentativo tra $1ms",
+    "description": "Messaggio di log per i tentativi di riprova.",
+    "placeholders": {
+      "waitTime": { "content": "$1" }
+    }
+  }
+}

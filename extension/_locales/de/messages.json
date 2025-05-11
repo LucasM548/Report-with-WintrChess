@@ -1,0 +1,143 @@
+{
+  "extensionName": {
+    "message": "Kostenlose Analyse mit WintrChess",
+    "description": "Der Name der Erweiterung."
+  },
+  "extensionDescription": {
+    "message": "Kostenlose Analyse Ihrer Partien auf Lichess/Chess.com mit WintrChess.",
+    "description": "Beschreibung der Erweiterung."
+  },
+  "extensionActionTitle": {
+    "message": "WintrChess Analysator",
+    "description": "Tooltip für die Browser-Aktionsschaltfläche."
+  },
+  "buttonTextAnalyzeWintrChess": {
+    "message": "Auf WintrChess analysieren",
+    "description": "Text für die Hauptanalyses-Schaltfläche."
+  },
+  "notificationPgnExtractionSlow": {
+    "message": "PGN wird extrahiert (langsames Gerät)...",
+    "description": "Benachrichtigungsmeldung."
+  },
+  "notificationPgnExtraction": {
+    "message": "PGN wird extrahiert...",
+    "description": "Benachrichtigungsmeldung."
+  },
+  "notificationPgnExtractionError": {
+    "message": "Fehler beim Extrahieren der PGN. Bitte versuchen Sie es erneut.",
+    "description": "Benachrichtigungsmeldung."
+  },
+  "notificationPgnFetchError": {
+    "message": "PGN konnte nicht abgerufen werden.",
+    "description": "Benachrichtigungsmeldung."
+  },
+  "notificationGenericErrorPrefix": {
+    "message": "Fehler: ",
+    "description": "Präfix für generische Fehlermeldungen."
+  },
+  "buttonStateRetrievingPgn": {
+    "message": "PGN wird abgerufen...",
+    "description": "Schaltflächentext während des Abrufens der PGN."
+  },
+  "notificationWintrchessPreparingAnalysisSlow": {
+    "message": "Analyse wird vorbereitet (langsames Gerät)...",
+    "description": "Benachrichtigung für die WintrChess-Seite auf langsamen Geräten."
+  },
+  "notificationWintrchessAutoPasteFailed": {
+    "message": "Automatisches Einfügen fehlgeschlagen. Bitte fügen Sie die PGN manuell ein.",
+    "description": "Benachrichtigung für die WintrChess-Seite."
+  },
+  "notificationWintrchessAutoPasteFailedClipboard": {
+    "message": "Automatisches Einfügen fehlgeschlagen. Bitte fügen Sie die PGN manuell ein (PGN in Zwischenablage kopiert).",
+    "description": "Benachrichtigung für die WintrChess-Seite mit Zwischenablage-Info."
+  },
+  "notificationPgnExtractionSlowChessCom": {
+    "message": "PGN wird extrahiert (langsames Gerät), bitte warten...",
+    "description": "Benachrichtigungsmeldung für die PGN-Extraktion von Chess.com auf einem langsamen Gerät."
+  },
+  "logSlowDeviceDetected": {
+    "message": "[WintrChess] Langsames Gerät erkannt. Leistungsfaktor: $1",
+    "description": "Protokollnachricht.",
+    "placeholders": {
+      "factor": {
+        "content": "$1",
+        "example": "2.50"
+      }
+    }
+  },
+  "logFastDeviceDetected": {
+    "message": "[WintrChess] Schnelles Gerät erkannt. Zeit: $1ms",
+    "description": "Protokollnachricht.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "25.00"
+      }
+    }
+  },
+  "logPgnFetchNoId": {
+    "message": "[WintrChess] PGN kann nicht abgerufen werden: keine Partie/Studien-ID erkannt",
+    "description": "Protokollnachricht."
+  },
+  "logPgnFromCacheLichess": {
+    "message": "[WintrChess] PGN aus dem Cache für Lichess abgerufen",
+    "description": "Protokollnachricht."
+  },
+  "logPgnFromCache": {
+    "message": "[WintrChess] PGN aus dem Cache abgerufen",
+    "description": "Protokollnachricht."
+  },
+  "logPgnFetchApiErrorLichess": {
+    "message": "[WintrChess] Fehler beim Abrufen der PGN über Lichess API:",
+    "description": "Präfix der Protokollnachricht."
+  },
+  "logMaxAttemptsReached": {
+    "message": "[WintrChess] Maximale Anzahl von Versuchen für Schaltfläche $1 erreicht. Zurücksetzen nach langer Verzögerung.",
+    "description": "Protokollnachricht.",
+    "placeholders": {
+      "buttonId": {
+        "content": "$1",
+        "example": "chesscom_main"
+      }
+    }
+  },
+  "logSharePanelClickFailed": {
+    "message": "[WintrChess] Fehlgeschlagen: $1 nicht gefunden/klickbar nach $2 Versuchen.",
+    "description": "Protokollnachricht.",
+    "placeholders": {
+      "description": { "content": "$1" },
+      "attempts": { "content": "$2" }
+    }
+  },
+  "errorSharePanelOpenFailed": {
+    "message": "Teilen-Fenster konnte nicht geöffnet werden",
+    "description": "Fehlermeldung."
+  },
+  "errorPgnTabNotFound": {
+    "message": "PGN-Tab nicht gefunden",
+    "description": "Fehlermeldung."
+  },
+  "errorPgnTextareaExtractionFailed": {
+    "message": "PGN konnte nicht aus dem Textbereich extrahiert werden",
+    "description": "Fehlermeldung."
+  },
+  "logWintrchessAutoPasteError": {
+    "message": "[WintrChess] Fehler beim automatischen Einfügen auf WintrChess:",
+    "description": "Präfix der Protokollnachricht."
+  },
+  "chessComShareButtonAriaLabel": {
+    "message": "Teilen",
+    "description": "Aria-Label für die Teilen-Schaltfläche auf Chess.com."
+  },
+  "descriptionPgnTab": {
+    "message": "PGN-Tab",
+    "description": "Beschreibung für die Funktion clickElementWithRetry."
+  },
+  "logRetryingInMs": {
+    "message": "[WintrChess] Erneuter Versuch in $1ms",
+    "description": "Protokollnachricht für Wiederholungsversuche.",
+    "placeholders": {
+      "waitTime": { "content": "$1" }
+    }
+  }
+}
