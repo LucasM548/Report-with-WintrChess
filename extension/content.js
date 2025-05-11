@@ -1,24 +1,42 @@
 (function () {
   "use strict";
 
-  function getMsg(messageKey, substitutions) {
-    try {
-      return chrome.i18n.getMessage(messageKey, substitutions);
-    } catch (e) {
-      console.warn(`[WintrChess] Missing translation for key: ${messageKey}`);
-      return messageKey;
-    }
-  }
+  // --- UTILITIES & HELPERS ---
+  const Utils = {
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    debounce: (fn, delay) => {
+      let timer = null;
+      return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    },
+    getMsg: (messageKey, substitutions) => {
+      try {
+        return chrome.i18n.getMessage(messageKey, substitutions) || messageKey;
+      } catch (e) {
+        console.warn(
+          `[WintrChess] Missing/Error for i18n key: ${messageKey}`,
+          e
+        );
+        if (typeof substitutions === "string")
+          return `${messageKey} (${substitutions})`;
+        if (Array.isArray(substitutions))
+          return `${messageKey} (${substitutions.join(", ")})`;
+        return messageKey;
+      }
+    },
+  };
 
-  // Configuration
   const CHESS_ICON_SVG = `<svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
   </svg>`;
 
+  // --- CONFIGURATION ---
   const CONFIG = {
     WINTRCHESS_URL: "https://wintrchess.com/",
     PGN_STORAGE_KEY: "wintrChessPgnToPaste",
-    BUTTON_TEXT: "",
+    BUTTON_TEXT_KEY: "buttonTextAnalyzeWintrChess",
     MAX_ATTEMPTS: 50,
     RETRY_DELAY: 1000,
     LONG_RETRY_DELAY: 3000,
@@ -29,8 +47,9 @@
     BUTTON_SELECTORS: {
       REVIEW_TERMS: ["bilan", "review", "analysis", "analyser", "analyze"],
       SHARED: [
+        // Applied to Chess.com
         {
-          selector: ".game-over-modal-content",
+          selector: ".game-over-modal-content", // Specifically for game over modal button
           method: "append",
           priority: 20,
         },
@@ -53,126 +72,27 @@
       ],
     },
   };
+  CONFIG.BUTTON_TEXT = "";
 
+  // --- STATE ---
   const STATE = {
-    buttonAdded: false,
-    observer: null,
-    platform: null,
+    isBaseInitialized: false,
+    platform: null, // 'lichess', 'chess.com', 'wintrchess'
+    domObserver: null,
     buttonInstances: new Map(),
     isSlowDevice: false,
     performanceFactor: 1,
-    initialized: false,
-    customCssInjected: false,
+    lichessCssInjected: false,
   };
 
-  function injectLichessCustomButtonCss() {
-    if (STATE.customCssInjected || STATE.platform !== "lichess") return;
-
-    const css = `
-      .wintchess-aurora-button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-family: 'Noto Sans', sans-serif;
-        font-size: 0.95em;
-        font-weight: 600;
-        color: #ffffff;
-        cursor: pointer;
-        border: none;
-        outline: none;
-        position: relative;
-        overflow: hidden;
-        transition: all 0.3s ease;
-        width: 97%;
-        box-sizing: border-box;
-        margin: 10px auto;
-        background: linear-gradient(135deg, #483D8B, #6A5ACD, #836FFF, #9370DB);
-        background-size: 300% 300%;
-        animation: wintchessAuroraGradientFlow 10s ease infinite;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-      }
-
-      .wintchess-aurora-button:before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: left 0.6s ease;
-      }
-
-      .wintchess-aurora-button:hover:before {
-        left: 100%;
-      }
-
-      .wintchess-aurora-button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-        filter: brightness(1.1);
-      }
-
-      .wintchess-aurora-button:active {
-        transform: translateY(0px);
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-        filter: brightness(0.95);
-      }
-
-      .wintchess-aurora-button .wintchess-icon {
-        width: 20px;
-        height: 20px;
-        fill: currentColor;
-        flex-shrink: 0;
-      }
-
-      .wintchess-aurora-button .button-text {
-        line-height: 1.2;
-        white-space: nowrap;
-      }
-
-      @keyframes wintchessAuroraGradientFlow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-    `;
-    const styleElement = document.createElement("style");
-    styleElement.type = "text/css";
-    styleElement.id = "wintchess-custom-lichess-style";
-    styleElement.appendChild(document.createTextNode(css));
-    (document.head || document.documentElement).appendChild(styleElement);
-    STATE.customCssInjected = true;
-  }
-
-  function detectDevicePerformance() {
-    const startTime = performance.now();
-    let counter = 0;
-    for (let i = 0; i < 1000000; i++) {
-      counter++;
-    }
-    const endTime = performance.now();
-    const duration = endTime - startTime;
-
-    if (duration > CONFIG.SLOW_DEVICE_THRESHOLD) {
-      STATE.isSlowDevice = true;
-      STATE.performanceFactor = Math.min(5, Math.max(1.5, duration / 20));
-      console.log(
-        getMsg("logSlowDeviceDetected", STATE.performanceFactor.toFixed(2))
-      );
-    } else {
-      console.log(getMsg("logFastDeviceDetected", duration.toFixed(2)));
-    }
-    return duration;
-  }
-
+  // --- CHROME STORAGE WRAPPER ---
   const chromeStorage = {
     setValue: (key, value) =>
-      new Promise((resolve) =>
-        chrome.storage.local.set({ [key]: value }, resolve)
+      new Promise((resolve, reject) =>
+        chrome.storage.local.set({ [key]: value }, () => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve();
+        })
       ),
     getValue: (key, defaultValue) =>
       new Promise((resolve) =>
@@ -181,100 +101,159 @@
         )
       ),
     deleteValue: (key) =>
-      new Promise((resolve) => chrome.storage.local.remove(key, resolve)),
+      new Promise((resolve, reject) =>
+        chrome.storage.local.remove(key, () => {
+          if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+          else resolve();
+        })
+      ),
   };
 
-  function ensureBasicInit() {
-    if (STATE.initialized) return;
+  // --- INITIALIZATION FUNCTIONS ---
 
+  function getPlatform() {
+    const hostname = window.location.hostname;
+    if (hostname.includes("lichess.org")) return "lichess";
+    if (hostname.includes("www.chess.com")) return "chess.com";
+    if (hostname.includes("wintrchess.com")) return "wintrchess";
+    return null;
+  }
+
+  function detectDevicePerformance() {
+    const startTime = performance.now();
+    for (let i = 0, counter = 0; i < 1000000; i++) counter++;
+    const duration = performance.now() - startTime;
+
+    if (duration > CONFIG.SLOW_DEVICE_THRESHOLD) {
+      STATE.isSlowDevice = true;
+      STATE.performanceFactor = Math.min(5, Math.max(1.5, duration / 20));
+      console.log(
+        Utils.getMsg(
+          "logSlowDeviceDetected",
+          STATE.performanceFactor.toFixed(2)
+        )
+      );
+    } else {
+      STATE.isSlowDevice = false;
+      STATE.performanceFactor = 1;
+      console.log(Utils.getMsg("logFastDeviceDetected", duration.toFixed(2)));
+    }
+  }
+
+  function ensureBaseInitialized() {
+    if (STATE.isBaseInitialized) return;
     if (!CONFIG.BUTTON_TEXT) {
-      CONFIG.BUTTON_TEXT = getMsg("buttonTextAnalyzeWintrChess");
+      CONFIG.BUTTON_TEXT = Utils.getMsg(CONFIG.BUTTON_TEXT_KEY);
     }
-    if (STATE.performanceFactor === 1 && !STATE.isSlowDevice) {
-      detectDevicePerformance();
-    }
-    if (!STATE.platform) {
-      const hostname = window.location.hostname;
-      if (hostname.includes("lichess.org")) {
-        STATE.platform = "lichess";
-        injectLichessCustomButtonCss();
-      } else if (hostname.includes("www.chess.com")) {
-        STATE.platform = "chess.com";
-      } else if (hostname.includes("wintrchess.com")) {
-        STATE.platform = "wintrchess";
+    STATE.isBaseInitialized = true;
+  }
+
+  function injectLichessCustomButtonCss() {
+    if (STATE.lichessCssInjected) return;
+
+    const css = `
+      .wintchess-aurora-button {
+        display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 20px;
+        border-radius: 8px; font-family: 'Noto Sans', sans-serif; font-size: 0.95em; font-weight: 600;
+        color: #ffffff; cursor: pointer; border: none; outline: none; position: relative;
+        overflow: hidden; transition: all 0.3s ease; width: 97%; box-sizing: border-box;
+        margin: 10px auto; background: linear-gradient(135deg, #483D8B, #6A5ACD, #836FFF, #9370DB);
+        background-size: 300% 300%; animation: wintchessAuroraGradientFlow 10s ease infinite;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
       }
-    }
-    STATE.initialized = true;
+      .wintchess-aurora-button:before {
+        content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.6s ease;
+      }
+      .wintchess-aurora-button:hover:before { left: 100%; }
+      .wintchess-aurora-button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); filter: brightness(1.1); }
+      .wintchess-aurora-button:active { transform: translateY(0px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2); filter: brightness(0.95); }
+      .wintchess-aurora-button .wintchess-icon { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+      .wintchess-aurora-button .button-text { line-height: 1.2; white-space: nowrap; }
+      @keyframes wintchessAuroraGradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    `;
+    const styleElement = document.createElement("style");
+    styleElement.type = "text/css";
+    styleElement.id = "wintchess-custom-lichess-style";
+    styleElement.appendChild(document.createTextNode(css));
+    (document.head || document.documentElement).appendChild(styleElement);
+    STATE.lichessCssInjected = true;
   }
 
   function init() {
-    ensureBasicInit();
+    STATE.platform = getPlatform();
+    if (!STATE.platform) return;
+
+    ensureBaseInitialized();
+    detectDevicePerformance();
 
     if (STATE.platform === "lichess") {
-      initializePlatformSpecificLogic("lichess", getLichessPageInfo);
+      injectLichessCustomButtonCss();
+      initializeSupportedPlatform("lichess", getLichessPageInfo);
     } else if (STATE.platform === "chess.com") {
-      initializePlatformSpecificLogic("chess.com", getChessComPageInfo);
+      initializeSupportedPlatform("chess.com", getChessComPageInfo);
     } else if (STATE.platform === "wintrchess") {
-      initWintrChess();
+      initWintrChessAutoPaste();
     }
   }
 
-  function initializePlatformSpecificLogic(platformName, getPageInfoFn) {
+  function initializeSupportedPlatform(platformName, getPageInfoFn) {
     const pageInfo = getPageInfoFn();
+    if (!pageInfo.isRelevantPage) return;
 
-    if (pageInfo.isRelevantPage) {
-      DomObserverManager.setupObserver(
-        () => tryAddButton(platformName),
-        platformName
-      );
+    DomObserverManager.setupObserver(
+      () => tryAddWintrChessButton(platformName),
+      platformName
+    );
+    tryAddWintrChessButton(platformName);
 
-      tryAddButton(platformName);
+    const debouncedTryAddButton = Utils.debounce(
+      () => tryAddWintrChessButton(platformName),
+      CONFIG.RETRY_DELAY
+    );
 
-      const debouncedTryAddButton = Utils.debounce(
-        () => tryAddButton(platformName),
-        CONFIG.RETRY_DELAY
-      );
+    window.addEventListener("load", debouncedTryAddButton);
+    window.addEventListener("hashchange", () => {
+      ButtonManager.removeAllButtons();
+      debouncedTryAddButton();
+    });
 
-      window.addEventListener("load", debouncedTryAddButton);
-      window.addEventListener("hashchange", () => {
-        ButtonManager.removeAllButtons();
-        debouncedTryAddButton();
-      });
+    const periodicCheckId = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      if (
+        STATE.buttonInstances.size === 0 ||
+        !document.querySelector(".wintchess-button, .wintchess-aurora-button")
+      ) {
+        tryAddWintrChessButton(platformName);
+      }
+    }, CONFIG.BUTTON_CHECK_INTERVAL);
 
-      const periodicCheck = setInterval(() => {
-        if (document.visibilityState === "hidden") return;
-        if (
-          !STATE.buttonAdded ||
-          !document.querySelector(".wintchess-button, .wintchess-aurora-button")
-        ) {
-          tryAddButton(platformName);
-        }
-      }, CONFIG.BUTTON_CHECK_INTERVAL);
-
-      window.addEventListener("beforeunload", () => {
-        clearInterval(periodicCheck);
-        DomObserverManager.disconnectExisting();
-        ButtonManager.removeAllButtons();
-      });
-    }
+    window.addEventListener("beforeunload", () => {
+      clearInterval(periodicCheckId);
+      DomObserverManager.disconnect();
+      ButtonManager.removeAllButtons();
+    });
   }
 
+  // --- PAGE INFO GETTERS ---
   function getLichessPageInfo() {
-    const pathParts = window.location.pathname
-      .split("/")
-      .filter((p) => p.length > 0);
-    let gameId = null;
-    let studyId = null;
-    let isRelevantPage = false;
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const gameIdRegex = /^[a-zA-Z0-9]{8,}$/;
+    let gameId = null,
+      studyId = null,
+      isRelevantPage = false;
 
     if (pathParts.length > 0) {
-      if (/^[a-zA-Z0-9]{8,}$/.test(pathParts[0])) {
+      if (gameIdRegex.test(pathParts[0]) && pathParts[0] !== "study") {
+        // Game or analysis of a game
         isRelevantPage = true;
         gameId = pathParts[0];
       } else if (pathParts[0] === "study" && pathParts.length >= 2) {
         isRelevantPage = true;
         studyId = pathParts[1];
-      } else if (pathParts[0] === "analysis") {
+      } else if (pathParts[0] === "analysis" && !pathParts[1]) {
+        // Generic analysis board
         isRelevantPage = true;
       }
     }
@@ -283,36 +262,39 @@
 
   function getChessComPageInfo() {
     const path = window.location.pathname;
-    let gameId = null;
-    let isRelevantPage = false;
-    let isReviewPage = false;
+    let gameId = null,
+      isRelevantPage = false,
+      isReviewPage = false;
 
     if (/^\/game\/(live|daily|computer)\/\d+/.test(path)) {
       isRelevantPage = true;
       gameId = path.split("/").pop();
-    } else if (/^\/analysis|^\/game\/|^\/play\/online/.test(path)) {
+    } else if (/^\/(analysis|game|play\/online|home|today)/.test(path)) {
       isRelevantPage = true;
     }
 
     if (
       /^\/analysis\/game\/(live|daily|computer)|^\/game-report|^\/analysis\/game-report/.test(
         path
+      ) ||
+      document.querySelector(
+        ".game-report-container, .analysis-game-report-area"
       )
-    ) {
-      isReviewPage = true;
-    }
-    if (
-      !isReviewPage &&
-      document.querySelector(".game-report-section, .game-review-container")
     ) {
       isReviewPage = true;
     }
     return { isRelevantPage, gameId, isReviewPage };
   }
 
+  // --- DOM OBSERVER ---
   const DomObserverManager = {
     relevantClassesByPlatform: {
-      lichess: ["analyse__tools", "study__buttons", "analyse__controls"],
+      lichess: [
+        "analyse__tools",
+        "study__buttons",
+        "analyse__controls",
+        "round__app",
+      ],
       "chess.com": [
         "board-controls",
         "game-controls",
@@ -320,17 +302,17 @@
         "game-over-modal-content",
         "analysis-controls",
         "modal-header-header",
+        "sidebar-component",
+        "board-layout-sidebar",
       ],
     },
-    relevantNodeNames: new Set(["chess-board"]),
+    relevantNodeNames: new Set(["chess-board", "vertical-move-list"]),
 
-    setupObserver(callback, platform = STATE.platform) {
-      this.disconnectExisting();
-
+    setupObserver(callback, platform) {
+      this.disconnect();
       const platformRelevantClasses = new Set(
         this.relevantClassesByPlatform[platform] || []
       );
-
       const observerConfig = {
         childList: true,
         subtree: true,
@@ -338,56 +320,45 @@
         attributeFilter: platform === "lichess" ? ["class"] : undefined,
       };
 
-      const debouncedCallback = Utils.debounce(callback, CONFIG.DEBOUNCE_DELAY);
+      const debouncedCallback = Utils.debounce(
+        callback,
+        CONFIG.DEBOUNCE_DELAY * STATE.performanceFactor
+      );
 
-      const processedCallback = (mutationsList) => {
-        let hasRelevantChanges = false;
+      const mutationCallback = (mutationsList) => {
         for (const mutation of mutationsList) {
-          if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-            for (const node of mutation.addedNodes) {
-              if (node.nodeType === Node.ELEMENT_NODE) {
-                const elem = node;
-                if (
+          if (
+            (mutation.type === "childList" &&
+              mutation.addedNodes.length > 0 &&
+              Array.from(mutation.addedNodes).some(
+                (node) =>
+                  node.nodeType === Node.ELEMENT_NODE &&
                   this.isElementOrContainsRelevant(
-                    elem,
+                    node,
                     platformRelevantClasses
                   )
-                ) {
-                  hasRelevantChanges = true;
-                  break;
-                }
-              }
-            }
-          } else if (
-            mutation.type === "attributes" &&
-            mutation.target.nodeType === Node.ELEMENT_NODE
-          ) {
-            if (
+              )) ||
+            (mutation.type === "attributes" &&
+              mutation.target.nodeType === Node.ELEMENT_NODE &&
               this.isElementOrContainsRelevant(
                 mutation.target,
                 platformRelevantClasses
-              )
-            ) {
-              hasRelevantChanges = true;
-            }
+              ))
+          ) {
+            debouncedCallback();
+            return;
           }
-          if (hasRelevantChanges) break;
-        }
-
-        if (hasRelevantChanges) {
-          debouncedCallback();
         }
       };
 
-      STATE.observer = new MutationObserver(processedCallback);
-      STATE.observer.observe(document.documentElement, observerConfig);
-      return STATE.observer;
+      STATE.domObserver = new MutationObserver(mutationCallback);
+      STATE.domObserver.observe(document.documentElement, observerConfig);
     },
 
-    disconnectExisting() {
-      if (STATE.observer) {
-        STATE.observer.disconnect();
-        STATE.observer = null;
+    disconnect() {
+      if (STATE.domObserver) {
+        STATE.domObserver.disconnect();
+        STATE.domObserver = null;
       }
     },
 
@@ -395,7 +366,6 @@
       if (!element || typeof element.matches !== "function") return false;
       if (this.isRelevantSingleElement(element, platformRelevantClasses))
         return true;
-
       for (const cls of platformRelevantClasses) {
         if (element.querySelector(`.${cls.split(" ").join(".")}`)) return true;
       }
@@ -408,375 +378,18 @@
     isRelevantSingleElement(element, platformRelevantClasses) {
       if (!element || !element.classList) return false;
       for (const className of platformRelevantClasses) {
-        const classParts = className.split(" ");
         if (
-          classParts.every((part) =>
-            element.classList.contains(part.replace(".", ""))
-          )
-        ) {
+          className
+            .split(" ")
+            .every((part) => element.classList.contains(part.replace(".", "")))
+        )
           return true;
-        }
       }
-      if (this.relevantNodeNames.has(element.nodeName.toLowerCase())) {
-        return true;
-      }
-      return false;
+      return this.relevantNodeNames.has(element.nodeName.toLowerCase());
     },
   };
 
-  const PgnExtractor = {
-    _cache: new Map(),
-    _cacheDuration: 60000,
-
-    _setCacheWithExpiry(key, value) {
-      if (!value) return;
-      const cacheItem = { value, timestamp: Date.now() };
-      this._cache.set(key, cacheItem);
-      setTimeout(() => {
-        if (this._cache.get(key) === cacheItem) this._cache.delete(key);
-      }, this._cacheDuration);
-    },
-
-    _getFromCache(key) {
-      const cacheItem = this._cache.get(key);
-      if (
-        !cacheItem ||
-        Date.now() - cacheItem.timestamp > this._cacheDuration
-      ) {
-        if (cacheItem) this._cache.delete(key);
-        return null;
-      }
-      return cacheItem.value;
-    },
-
-    async fromLichess() {
-      ensureBasicInit();
-      const pageInfo = getLichessPageInfo();
-      if (!pageInfo.gameId && !pageInfo.studyId) {
-        console.log(getMsg("logPgnFetchNoId"));
-        return null;
-      }
-
-      const idToFetch = pageInfo.gameId || pageInfo.studyId;
-      const isStudy = !pageInfo.gameId && pageInfo.studyId;
-
-      const cacheKey = `lichess_${idToFetch}`;
-      const cachedPgn = this._getFromCache(cacheKey);
-      if (cachedPgn) {
-        console.log(getMsg("logPgnFromCacheLichess"));
-        return cachedPgn;
-      }
-
-      try {
-        const pgn = await fetchPgnFromApi(idToFetch, isStudy);
-        if (pgn) {
-          this._setCacheWithExpiry(cacheKey, pgn);
-        }
-        return pgn;
-      } catch (error) {
-        console.error(getMsg("logPgnFetchApiErrorLichess"), error);
-        return null;
-      }
-    },
-
-    async fromChessCom() {
-      ensureBasicInit();
-      const pageInfo = getChessComPageInfo();
-      const cacheKey = `chesscom_${
-        pageInfo.gameId || window.location.pathname
-      }`;
-      const cachedPgn = this._getFromCache(cacheKey);
-      if (cachedPgn) {
-        console.log(getMsg("logPgnFromCache"));
-        return cachedPgn;
-      }
-
-      NotificationManager.show(
-        STATE.isSlowDevice
-          ? getMsg("notificationPgnExtractionSlow")
-          : getMsg("notificationPgnExtraction"),
-        STATE.isSlowDevice ? 8000 : 3000
-      );
-
-      try {
-        if (STATE.isSlowDevice) {
-          await Utils.sleep(1000 * STATE.performanceFactor);
-        }
-
-        let pgn = null;
-        let attempts = 0;
-        const maxAttempts = STATE.isSlowDevice ? 3 : 2;
-
-        while (!pgn && attempts < maxAttempts) {
-          try {
-            pgn = await getPgnFromSharePanel();
-            if (!pgn && attempts < maxAttempts - 1) {
-              const waitTime =
-                1000 *
-                (attempts + 1) *
-                (STATE.isSlowDevice ? STATE.performanceFactor : 1);
-              console.log(getMsg("logRetryingInMs", waitTime.toString()));
-              await Utils.sleep(waitTime);
-            }
-          } catch (err) {
-            console.error(
-              `[WintrChess] Erreur tentative ${attempts + 1}:`,
-              err
-            );
-          } finally {
-            attempts++;
-          }
-        }
-
-        if (pgn) {
-          this._setCacheWithExpiry(cacheKey, pgn);
-          return pgn;
-        }
-        throw new Error(
-          "Unable to retrieve the PGN from the Chess.com page after several attempts."
-        );
-      } catch (error) {
-        console.error("[WintrChess] Error extracting PGN:", error);
-        NotificationManager.show(
-          getMsg("notificationPgnExtractionError"),
-          5000
-        );
-        throw error;
-      }
-    },
-  };
-
-  function fetchPgnFromApi(id, isStudy = false) {
-    const apiUrl = isStudy
-      ? `https://lichess.org/study/${id}.pgn?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`
-      : `https://lichess.org/game/export/${id}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
-
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { action: "fetchPgn", url: apiUrl },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            const errorMsg =
-              chrome.runtime.lastError.message ||
-              "Background script communication error";
-            console.error(
-              "[WintrChess] fetchPgnFromApi runtime error:",
-              errorMsg
-            );
-            return reject(errorMsg);
-          }
-          if (response && response.success) {
-            resolve(response.data.trim());
-          } else {
-            const errorDetail = response
-              ? response.error
-              : "Unknown error from background script";
-            console.error(
-              "[WintrChess] fetchPgnFromApi response error:",
-              errorDetail
-            );
-            reject(errorDetail);
-          }
-        }
-      );
-    });
-  }
-
-  const ButtonFactory = {
-    create(options) {
-      const { className, style, innerHTML, onClick } = options;
-      const button = document.createElement("button");
-      if (className.includes("wintchess-aurora-button")) {
-        button.className = className;
-      } else {
-        button.className = className + " wintchess-button";
-      }
-
-      if (style) {
-        button.style.cssText = style;
-      }
-      button.innerHTML = innerHTML;
-      this.attachEventHandler(button, onClick);
-      return button;
-    },
-
-    attachEventHandler(button, onClickHandler) {
-      button.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        event.preventDefault();
-        button.disabled = true;
-        ensureBasicInit();
-
-        const textElement = button.querySelector(".button-text") || button;
-        const originalText = textElement.textContent;
-        textElement.textContent = getMsg("buttonStateRetrievingPgn");
-
-        try {
-          const pgn = await onClickHandler();
-          if (pgn) {
-            await chromeStorage.setValue(CONFIG.PGN_STORAGE_KEY, pgn);
-            chrome.runtime.sendMessage({
-              action: "openWintrChess",
-              url: CONFIG.WINTRCHESS_URL,
-            });
-          } else {
-            NotificationManager.show(getMsg("notificationPgnFetchError"));
-          }
-        } catch (error) {
-          console.error("[WintrChess] Error on button click:", error);
-          NotificationManager.show(
-            getMsg("notificationGenericErrorPrefix") +
-              (error.message || getMsg("notificationPgnFetchError"))
-          );
-        } finally {
-          setTimeout(() => {
-            if (button && button.isConnected) {
-              button.disabled = false;
-              textElement.textContent = originalText;
-            }
-          }, 1000);
-        }
-      });
-    },
-  };
-
-  function getButtonConfigs(localizedButtonText) {
-    // Ensure CSS is injected if on Lichess and not already done
-    if (STATE.platform === "lichess" && !STATE.customCssInjected) {
-      injectLichessCustomButtonCss();
-    }
-    return {
-      lichess: {
-        className: "wintchess-aurora-button",
-        innerHTML: `
-          <svg class="wintchess-icon" viewBox="0 0 32 32" aria-hidden="true">
-            <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
-          </svg>
-          <span class="button-text">${localizedButtonText}</span>
-        `,
-      },
-      chesscom: {
-        className:
-          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-        style: `margin-top: 8px; width: 100%; margin-bottom: 6px;`,
-        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon">${CHESS_ICON_SVG}</span><span class="cc-button-one-line button-text">${localizedButtonText}</span>`,
-      },
-      gameOver: {
-        className:
-          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-        style: `width: 100%; margin-top: 3px; margin-bottom: 6px;`,
-        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">${CHESS_ICON_SVG}</span><span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${localizedButtonText}</span>`,
-      },
-    };
-  }
-
-  function createWintrChessButton(type = STATE.platform) {
-    ensureBasicInit();
-    const BUTTON_CONFIGS = getButtonConfigs(CONFIG.BUTTON_TEXT);
-
-    const typeKey = type === "chess.com" ? "chesscom" : type;
-    const config = BUTTON_CONFIGS[typeKey] || BUTTON_CONFIGS.lichess;
-
-    const pgnSourcePlatform =
-      type === "gameOver" ||
-      type === "chesscom" ||
-      STATE.platform === "chess.com"
-        ? "chess.com"
-        : "lichess";
-
-    return ButtonFactory.create({
-      ...config,
-      onClick: () =>
-        pgnSourcePlatform === "chess.com"
-          ? PgnExtractor.fromChessCom()
-          : PgnExtractor.fromLichess(),
-    });
-  }
-
-  function tryAddButtonToGameOverModal() {
-    ensureBasicInit();
-    const modalContent = document.querySelector(".game-over-modal-content");
-    if (!modalContent) return false;
-
-    const buttonId = "chesscom_gameover_modal";
-    if (
-      STATE.buttonInstances.has(buttonId) &&
-      document.contains(STATE.buttonInstances.get(buttonId).button)
-    ) {
-      return true;
-    }
-
-    const buttonList = modalContent.querySelector(".game-over-modal-buttons");
-    if (!buttonList) return false;
-
-    if (
-      buttonList.querySelector(
-        ".wintchess-button-container.game-over-review-button-component .wintchess-button"
-      )
-    ) {
-      return true;
-    }
-
-    try {
-      const bilanContainer = buttonList.querySelector(
-        ".game-over-review-button-component"
-      );
-      const button = createWintrChessButton("gameOver");
-      const buttonContainer = document.createElement("div");
-      buttonContainer.className =
-        "wintchess-button-container game-over-review-button-component";
-      buttonContainer.appendChild(button);
-
-      let insertionPoint = null;
-      let referenceNode = null;
-
-      if (bilanContainer) {
-        insertionPoint = bilanContainer.parentElement;
-        referenceNode = bilanContainer.nextSibling;
-      } else {
-        const bilanLabel = Array.from(
-          buttonList.querySelectorAll(".game-over-review-button-label, span")
-        ).find((span) =>
-          CONFIG.BUTTON_SELECTORS.REVIEW_TERMS.some((term) =>
-            span.textContent.toLowerCase().includes(term)
-          )
-        );
-
-        if (bilanLabel) {
-          const parentContainer =
-            bilanLabel.closest("div") || bilanLabel.parentElement;
-          if (parentContainer && parentContainer.parentElement) {
-            insertionPoint = parentContainer.parentElement;
-            referenceNode = parentContainer.nextSibling;
-          }
-        }
-      }
-
-      if (!insertionPoint) {
-        insertionPoint = buttonList;
-        referenceNode = buttonList.firstChild;
-      }
-
-      if (insertionPoint) {
-        insertionPoint.insertBefore(buttonContainer, referenceNode);
-        STATE.buttonInstances.set(buttonId, {
-          button: buttonContainer,
-          element: insertionPoint,
-          method: "insertBefore",
-        });
-        STATE.buttonAdded = true;
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error(
-        "[WintrChess] Error adding button to game over modal:",
-        error
-      );
-      return false;
-    }
-  }
-
+  // --- NOTIFICATION MANAGER ---
   const NotificationManager = (() => {
     let activeNotification = null;
     let timerId = null;
@@ -789,16 +402,23 @@
         activeNotification.textContent = message;
         activeNotification.style.cssText = `
           position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-          padding: 10px 20px; background-color: #333; color: white;
-          border-radius: 4px; z-index: ${Z_INDEX}; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-          opacity: 1; transition: opacity 0.5s ease; font-family: sans-serif; font-size: 14px;`;
+          padding: 12px 22px; background-color: #2c3e50; color: white; letter-spacing: 0.5px;
+          border-radius: 6px; z-index: ${Z_INDEX}; box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+          opacity: 0; transition: opacity 0.3s ease-in-out, top 0.3s ease-in-out; font-family: "Segoe UI", Roboto, sans-serif; font-size: 14px;
+          line-height: 1.4; text-align: center; max-width: 90%;`;
         document.body.appendChild(activeNotification);
+
+        activeNotification.offsetHeight;
+        activeNotification.style.opacity = "1";
+        activeNotification.style.top = "30px";
+
         timerId = setTimeout(() => this.hide(), duration);
       },
       hide() {
         if (!activeNotification) return;
         activeNotification.style.opacity = "0";
-        setTimeout(() => this.clear(), 500);
+        activeNotification.style.top = "20px";
+        setTimeout(() => this.clear(), 300);
       },
       clear() {
         if (timerId) clearTimeout(timerId);
@@ -811,267 +431,142 @@
     };
   })();
 
-  function tryAddButton(platform, attempts = 0) {
-    ensureBasicInit();
-    if (!STATE.platform) STATE.platform = platform;
+  // --- PGN EXTRACTION ---
+  const PgnExtractor = {
+    _cache: new Map(),
+    _cacheDuration: 60000,
 
-    if (platform === "chess.com") {
+    _setCache(key, value) {
+      if (!value) return;
+      this._cache.set(key, { value, timestamp: Date.now() });
+    },
+    _getFromCache(key) {
+      const item = this._cache.get(key);
+      if (item && Date.now() - item.timestamp < this._cacheDuration) {
+        return item.value;
+      }
+      this._cache.delete(key);
+      return null;
+    },
+
+    async fetchPgnViaBackground(apiUrl) {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { action: "fetchPgn", url: apiUrl },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              return reject(
+                new Error(
+                  chrome.runtime.lastError.message ||
+                    "Background script communication error"
+                )
+              );
+            }
+            if (response && response.success) {
+              resolve(response.data.trim());
+            } else {
+              reject(
+                new Error(
+                  response?.error || "Unknown error from background script"
+                )
+              );
+            }
+          }
+        );
+      });
+    },
+
+    async fromLichess() {
+      ensureBaseInitialized();
+      const pageInfo = getLichessPageInfo();
+      const idToFetch = pageInfo.gameId || pageInfo.studyId;
+
+      if (!idToFetch) {
+        const pgnTextarea = document.querySelector(".pgn textarea");
+        if (pgnTextarea && pgnTextarea.value) {
+          return pgnTextarea.value.trim();
+        }
+        console.log(Utils.getMsg("logPgnFetchNoId"));
+        NotificationManager.show(
+          Utils.getMsg("notificationPgnFetchError") + " (No game ID)",
+          4000
+        );
+        return null;
+      }
+
+      const cacheKey = `lichess_${idToFetch}`;
+      const cachedPgn = this._getFromCache(cacheKey);
+      if (cachedPgn) {
+        console.log(Utils.getMsg("logPgnFromCacheLichess"));
+        return cachedPgn;
+      }
+
+      try {
+        const isStudy = !!pageInfo.studyId;
+        const apiUrl = isStudy
+          ? `https://lichess.org/study/${idToFetch}.pgn?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`
+          : `https://lichess.org/game/export/${idToFetch}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
+
+        const pgn = await this.fetchPgnViaBackground(apiUrl);
+        if (pgn) this._setCache(cacheKey, pgn);
+        return pgn;
+      } catch (error) {
+        console.error(Utils.getMsg("logPgnFetchApiErrorLichess"), error);
+        NotificationManager.show(
+          Utils.getMsg("notificationPgnFetchError") +
+            ` (Lichess API: ${error.message})`,
+          5000
+        );
+        return null;
+      }
+    },
+
+    async fromChessCom() {
+      ensureBaseInitialized();
       const pageInfo = getChessComPageInfo();
-      if (pageInfo.isReviewPage) {
-        ButtonManager.removeAllButtons();
-        return false;
+      const cacheKey = `chesscom_${
+        pageInfo.gameId || window.location.pathname.replace(/\//g, "_")
+      }`;
+      const cachedPgn = this._getFromCache(cacheKey);
+      if (cachedPgn) {
+        console.log(Utils.getMsg("logPgnFromCache"));
+        return cachedPgn;
       }
-      if (tryAddButtonToGameOverModal()) {
-        return true;
-      }
-      if (STATE.buttonInstances.has("chesscom_gameover_modal")) {
-        ButtonManager.removeButtonById("chesscom_gameover_modal");
-      }
-    }
 
-    let targets = ButtonManager.getTargets(platform);
-
-    if (platform === "chess.com") {
-      const bilanButton = findGameReviewButton();
-      if (bilanButton && bilanButton.parentNode) {
-        targets = [
-          { element: bilanButton, method: "afterend", priority: 100 },
-          ...targets,
-        ];
-      }
-    }
-
-    const buttonId =
-      platform === "chess.com" ? "chesscom_main" : "lichess_main";
-
-    return ButtonManager.addButton({
-      id: buttonId,
-      buttonCreator: () => createWintrChessButton(platform), // Pass platform to ensure correct config is used
-      targets: targets,
-      attempts: attempts,
-      retryFn: (newAttempts) => tryAddButton(platform, newAttempts),
-    });
-  }
-
-  const ButtonManager = (() => {
-    const buttonCache = new Map();
-    const targetCache = new Map();
-
-    const getRetryDelay = (attempts) =>
-      Math.min(
-        CONFIG.RETRY_DELAY * Math.pow(1.5, attempts),
-        CONFIG.LONG_RETRY_DELAY
+      NotificationManager.show(
+        STATE.isSlowDevice
+          ? Utils.getMsg("notificationPgnExtractionSlowChessCom")
+          : Utils.getMsg("notificationPgnExtraction"),
+        STATE.isSlowDevice ? 8000 : 4000
       );
 
-    return {
-      addButton({
-        id = "default",
-        buttonCreator,
-        targets,
-        attempts = 0,
-        retryFn,
-        checkExisting = true,
-      }) {
-        ensureBasicInit();
-        const actualRetryFn =
-          retryFn ||
-          ((newAttempts) =>
-            this.addButton({
-              id,
-              buttonCreator,
-              targets,
-              attempts: newAttempts,
-              retryFn,
-              checkExisting,
-            }));
+      // Give UI time to settle, especially on slow devices
+      if (STATE.isSlowDevice) await Utils.sleep(1000 * STATE.performanceFactor);
 
-        const existingInstance = STATE.buttonInstances.get(id);
-        if (
-          checkExisting &&
-          existingInstance &&
-          document.contains(existingInstance.button)
-        ) {
-          STATE.buttonAdded = true;
-          return true;
-        }
+      try {
+        const pgn = await this._extractChessComPgnViaSharePanel();
+        if (pgn) this._setCache(cacheKey, pgn);
+        return pgn;
+      } catch (error) {
+        console.error("[WintrChess] Error extracting Chess.com PGN:", error);
+        NotificationManager.show(
+          Utils.getMsg("notificationPgnExtractionError") + `: ${error.message}`,
+          5000
+        );
+        throw error;
+      }
+    },
 
-        if (existingInstance && !document.contains(existingInstance.button)) {
-          STATE.buttonInstances.delete(id);
-          buttonCache.delete(id);
-        }
-
-        if (document.readyState !== "complete" && attempts < 5) {
-          setTimeout(() => actualRetryFn(attempts + 1), CONFIG.RETRY_DELAY / 2);
-          return false;
-        }
-
-        let button = buttonCache.get(id);
-        if (!button || !document.contains(button)) {
-          button = buttonCreator();
-          buttonCache.set(id, button);
-        }
-
-        if (this.insertButton(id, button, targets)) {
-          STATE.buttonAdded = true;
-          return true;
-        }
-
-        if (attempts < CONFIG.MAX_ATTEMPTS - 1) {
-          setTimeout(
-            () => actualRetryFn(attempts + 1),
-            getRetryDelay(attempts)
-          );
-        } else {
-          console.warn(getMsg("logMaxAttemptsReached", [id]));
-          setTimeout(() => actualRetryFn(0), CONFIG.LONG_RETRY_DELAY * 2);
-        }
-        return false;
-      },
-
-      insertButton(id, button, targets) {
-        let sortedTargets = targetCache.get(JSON.stringify(targets));
-        if (!sortedTargets) {
-          sortedTargets = [...targets].sort(
-            (a, b) => (b.priority || 0) - (a.priority || 0)
-          );
-          targetCache.set(JSON.stringify(targets), sortedTargets);
-        }
-
-        const buttonSelector =
-          STATE.platform === "lichess"
-            ? ".wintchess-aurora-button"
-            : ".wintchess-button";
-
-        for (const targetConfig of sortedTargets) {
-          const { selector, method, element: predefinedElement } = targetConfig;
-          let elementToAttachTo = null;
-
-          if (predefinedElement && document.contains(predefinedElement)) {
-            elementToAttachTo = predefinedElement;
-          } else if (typeof selector === "string") {
-            const elements = document.querySelectorAll(selector);
-            if (elements.length > 0) {
-              elementToAttachTo =
-                Array.from(elements).find((el) => el.offsetParent !== null) ||
-                elements[0];
-            }
-          }
-
-          if (!elementToAttachTo) continue;
-
-          if (
-            method === "append" &&
-            elementToAttachTo.querySelector(
-              `:scope > ${buttonSelector}, :scope > .wintchess-button-container ${buttonSelector}`
-            )
-          )
-            continue;
-          if (
-            (method === "after" || method === "afterend") &&
-            elementToAttachTo.nextElementSibling &&
-            (elementToAttachTo.nextElementSibling.matches(buttonSelector) ||
-              elementToAttachTo.nextElementSibling.matches(
-                `.wintchess-button-container ${buttonSelector}`
-              ))
-          )
-            continue;
-
-          try {
-            if (method === "append") {
-              elementToAttachTo.appendChild(button);
-            } else if (method === "after" || method === "afterend") {
-              elementToAttachTo.parentNode.insertBefore(
-                button,
-                elementToAttachTo.nextSibling
-              );
-            } else {
-              elementToAttachTo.insertAdjacentElement(method, button);
-            }
-            STATE.buttonInstances.set(id, {
-              button,
-              element: elementToAttachTo,
-              method,
-            });
-            return true;
-          } catch (error) {
-            console.warn(
-              `[WintrChess] Failed to insert button with method ${method} on selector ${
-                selector || "predefined element"
-              }:`,
-              error
-            );
-          }
-        }
-        return false;
-      },
-
-      getTargets(platform = STATE.platform) {
-        const cacheKey = `targets_${platform}`;
-        if (targetCache.has(cacheKey)) return targetCache.get(cacheKey);
-
-        let result = [];
-        if (platform === "lichess") {
-          result = [...CONFIG.BUTTON_SELECTORS.LICHESS];
-        } else if (platform === "chess.com") {
-          result = [
-            ...CONFIG.BUTTON_SELECTORS.SHARED,
-            ...CONFIG.BUTTON_SELECTORS.CHESS_COM,
-          ];
-        }
-
-        targetCache.set(cacheKey, result);
-        return result;
-      },
-
-      removeButtonById(id) {
-        const instance = STATE.buttonInstances.get(id);
-        if (instance && instance.button && instance.button.parentNode) {
-          instance.button.parentNode.removeChild(instance.button);
-        }
-        STATE.buttonInstances.delete(id);
-        buttonCache.delete(id);
-        if (STATE.buttonInstances.size === 0) {
-          STATE.buttonAdded = false;
-        }
-      },
-
-      removeAllButtons() {
-        STATE.buttonInstances.forEach(({ button }) => {
-          if (button && button.parentNode) {
-            button.parentNode.removeChild(button);
-          }
-        });
-        STATE.buttonInstances.clear();
-        buttonCache.clear();
-        STATE.buttonAdded = false;
-      },
-    };
-  })();
-
-  async function getPgnFromSharePanel() {
-    ensureBasicInit();
-    return new Promise((resolve, reject) => {
-      const getDelay = (baseDelay) =>
-        STATE.isSlowDevice
-          ? baseDelay * Math.max(1.5, STATE.performanceFactor)
-          : baseDelay;
-
-      const closeSharePanel = () => {
-        try {
-          const closeButton = document.querySelector(
-            'button.cc-modal-header-close[aria-label="Fermer"], .share-menu-close, button[aria-label="Close"]'
-          );
-          if (closeButton) closeButton.click();
-        } catch (e) {
-          /* ignore */
-        }
-      };
+    async _extractChessComPgnViaSharePanel() {
+      const getAdjustedDelay = (baseDelay) =>
+        baseDelay *
+        (STATE.isSlowDevice ? Math.max(1.5, STATE.performanceFactor) : 1);
 
       const clickElementWithRetry = async (
         selectors,
         descriptionKey,
         maxAttempts = 5,
-        attemptDelay = 500
+        baseAttemptDelay = 250
       ) => {
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           for (const selector of selectors) {
@@ -1081,31 +576,38 @@
                 : selector.findFn
                 ? selector.findFn()
                 : null;
-            if (element && typeof element.click === "function") {
+            if (
+              element &&
+              typeof element.click === "function" &&
+              !element.disabled &&
+              element.offsetParent !== null
+            ) {
               try {
                 element.click();
                 return true;
-              } catch (e) {
-                /* ignore click error, try next */
-              }
+              } catch (e) {}
             }
           }
-          if (attempt < maxAttempts - 1) {
-            await Utils.sleep(getDelay(attemptDelay));
-          }
+          if (attempt < maxAttempts - 1)
+            await Utils.sleep(
+              getAdjustedDelay(baseAttemptDelay) * (attempt + 1)
+            );
         }
         console.error(
-          getMsg("logSharePanelClickFailed", [
-            getMsg(descriptionKey),
+          Utils.getMsg("logSharePanelClickFailed", [
+            Utils.getMsg(descriptionKey),
             maxAttempts.toString(),
           ])
         );
         return false;
       };
 
-      const extractPgnValue = async (maxAttempts = 5, attemptDelay = 500) => {
+      const extractPgnValue = async (
+        maxAttempts = 5,
+        baseAttemptDelay = 250
+      ) => {
         const textareaSelectors = [
-          'textarea.cc-textarea-component.cc-textarea-x-large.share-menu-tab-pgn-textarea[aria-label="PGN"]',
+          'textarea.share-menu-tab-pgn-textarea[aria-label="PGN"]',
           'textarea[aria-label="PGN"]',
           "textarea.share-menu-tab-pgn-textarea",
           "textarea.cc-textarea-component",
@@ -1117,63 +619,61 @@
             if (
               textarea &&
               textarea.value &&
-              textarea.value.includes("[Event")
+              textarea.value.includes("[Event") &&
+              textarea.offsetParent !== null
             ) {
               return textarea.value;
             }
           }
-          if (attempt < maxAttempts - 1) {
-            await Utils.sleep(getDelay(attemptDelay));
-          }
+          if (attempt < maxAttempts - 1)
+            await Utils.sleep(
+              getAdjustedDelay(baseAttemptDelay) * (attempt + 1)
+            );
         }
         return null;
       };
 
-      (async () => {
-        let shareButtonSelectors = [
-          `button[aria-label="${["Share", "Partager", "Compartir"]}"]`,
+      let sharePanelOpened = false;
+      try {
+        const shareButtonSelectors = [
+          'button[aria-label*="Share"], button[aria-label*="Partager"], button[aria-label*="Compartir"]',
           ".icon-font-chess.share",
           '[data-cy="share-button"]',
           "button.share-button",
           "button.game-controls-component__share",
-          `button[title="${["Share", "Partager", "Compartir"]}"]`,
-        ];
-        if (STATE.isSlowDevice) {
-          shareButtonSelectors.push({
+          {
             findFn: () =>
-              Array.from(document.querySelectorAll("button")).find((btn) => {
-                const text = btn.textContent?.toLowerCase() || "";
-                return ["Share", "Partager", "Compartir"].some((term) =>
-                  text.includes(term.trim())
-                );
-              }),
-          });
-        }
-
+              Array.from(
+                document.querySelectorAll("button, div[role='button']")
+              ).find(
+                (btn) =>
+                  /share|partager|compartir/i.test(btn.textContent) &&
+                  !/shared game/i.test(btn.textContent)
+              ),
+          },
+        ];
         if (
           !(await clickElementWithRetry(
             shareButtonSelectors,
             "chessComShareButtonAriaLabel",
-            STATE.isSlowDevice ? 8 : 5
+            STATE.isSlowDevice ? 8 : 5,
+            300
           ))
         ) {
-          return reject(getMsg("errorSharePanelOpenFailed"));
+          throw new Error(Utils.getMsg("errorSharePanelOpenFailed"));
         }
-        await Utils.sleep(getDelay(STATE.isSlowDevice ? 1000 : 500));
+        sharePanelOpened = true;
+        await Utils.sleep(getAdjustedDelay(STATE.isSlowDevice ? 700 : 400));
 
         const pgnTabSelectors = [
-          'button.cc-tab-item-component#tab-pgn[aria-controls="tabpanel-pgn"]',
+          'button#tab-pgn[aria-controls="tabpanel-pgn"]',
           'button.cc-tab-item-component[aria-controls="tabpanel-pgn"]',
-          'button[id*="pgn"]',
-          'button[aria-controls*="pgn"]',
-          "div.tabs button",
-          "li.tab-pgn",
-          ".share-menu-tabs .tab",
+          'button[id*="pgn" i], button[aria-controls*="pgn" i]',
           {
             findFn: () =>
               Array.from(
                 document.querySelectorAll(
-                  ".share-menu-tab button, .cc-tabs-component button, .modal-tabs button, .tabs button, nav.tabs button, .tabs-component button"
+                  ".share-menu-tab button, .cc-tabs-component button, .modal-tabs button, nav.tabs button, .tabs-component button"
                 )
               ).find((btn) => btn.textContent?.toUpperCase().includes("PGN")),
           },
@@ -1183,56 +683,500 @@
             pgnTabSelectors,
             "descriptionPgnTab",
             5,
-            getDelay(500)
+            300
           ))
         ) {
-          closeSharePanel();
-          return reject(getMsg("errorPgnTabNotFound"));
+          throw new Error(Utils.getMsg("errorPgnTabNotFound"));
         }
-        await Utils.sleep(getDelay(STATE.isSlowDevice ? 1500 : 1000));
+        await Utils.sleep(getAdjustedDelay(STATE.isSlowDevice ? 1000 : 500));
 
-        const pgn = await extractPgnValue(5, getDelay(500));
-        closeSharePanel();
-        if (pgn) {
-          resolve(pgn);
-        } else {
-          reject(getMsg("errorPgnTextareaExtractionFailed"));
+        const pgn = await extractPgnValue(5, 300);
+        if (pgn) return pgn;
+        throw new Error(Utils.getMsg("errorPgnTextareaExtractionFailed"));
+      } finally {
+        if (sharePanelOpened) {
+          try {
+            const closeButton = document.querySelector(
+              'button.cc-modal-header-close, .share-menu-close, button[aria-label*="Close" i], button[aria-label*="Fermer" i]'
+            );
+            if (closeButton) closeButton.click();
+          } catch (e) {
+            console.warn(
+              "[WintrChess] Non-critical error closing share panel:",
+              e
+            );
+          }
         }
-      })().catch((err) => {
-        closeSharePanel();
-        reject(err);
-      });
-
-      if (STATE.isSlowDevice) {
-        NotificationManager.show(
-          getMsg("notificationPgnExtractionSlowChessCom"),
-          5000
-        );
       }
+    },
+  };
+
+  // --- BUTTON FACTORY & MANAGER ---
+  const ButtonFactory = {
+    create(options) {
+      const { className, style, innerHTML, onClick } = options;
+      const button = document.createElement("button");
+      button.className = className; // Base class set by config
+      if (!className.includes("wintchess-aurora-button")) {
+        // Add generic class if not Aurora
+        button.classList.add("wintchess-button");
+      }
+
+      if (style) button.style.cssText = style;
+      button.innerHTML = innerHTML;
+      this.attachEventHandler(button, onClick);
+      return button;
+    },
+
+    attachEventHandler(button, onClickHandler) {
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        if (button.disabled) return;
+
+        button.disabled = true;
+        ensureBaseInitialized(); // Ensure messages are loaded
+
+        const textElement = button.querySelector(".button-text") || button;
+        const originalText = textElement.textContent;
+        textElement.textContent = Utils.getMsg("buttonStateRetrievingPgn");
+
+        try {
+          const pgn = await onClickHandler(); // This is PgnExtractor.fromLichess or fromChessCom
+          if (pgn) {
+            await chromeStorage.setValue(CONFIG.PGN_STORAGE_KEY, pgn);
+            chrome.runtime.sendMessage({
+              action: "openWintrChess",
+              url: CONFIG.WINTRCHESS_URL,
+            });
+          } else if (
+            !pgn &&
+            STATE.platform === "lichess" &&
+            !getLichessPageInfo().gameId &&
+            !getLichessPageInfo().studyId
+          ) {
+            NotificationManager.show(
+              Utils.getMsg("notificationPgnFetchError"),
+              4000
+            );
+          }
+        } catch (error) {
+          console.error("[WintrChess] Error on button click:", error);
+          // Error specific notifications are shown in PgnExtractor methods usually
+          // If not, a generic one can be shown here, but it's often redundant.
+          // NotificationManager.show(Utils.getMsg("notificationGenericErrorPrefix") + (error.message || Utils.getMsg("notificationPgnFetchError")), 5000);
+        } finally {
+          setTimeout(() => {
+            if (button && button.isConnected) {
+              button.disabled = false;
+              textElement.textContent = originalText;
+            }
+          }, 1500);
+        }
+      });
+    },
+  };
+
+  function getButtonRenderConfigs(localizedButtonText) {
+    return {
+      lichess: {
+        className: "wintchess-aurora-button",
+        innerHTML: `<svg class="wintchess-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path></svg><span class="button-text">${localizedButtonText}</span>`,
+      },
+      chesscom: {
+        className:
+          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
+        style: `margin-top: 8px; width: 100%; margin-bottom: 6px;`,
+        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon">${CHESS_ICON_SVG}</span><span class="cc-button-one-line button-text">${localizedButtonText}</span>`,
+      },
+      chesscomGameOver: {
+        className:
+          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
+        style: `width: 100%; margin-top: 3px; margin-bottom: 6px;`,
+        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">${CHESS_ICON_SVG}</span><span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${localizedButtonText}</span>`,
+      },
+    };
+  }
+
+  function createWintrChessButton(platform, type = "default") {
+    ensureBaseInitialized();
+    const RENDER_CONFIGS = getButtonRenderConfigs(CONFIG.BUTTON_TEXT);
+
+    let config;
+    if (platform === "lichess") {
+      config = RENDER_CONFIGS.lichess;
+    } else if (platform === "chess.com") {
+      config =
+        type === "gameOver"
+          ? RENDER_CONFIGS.chesscomGameOver
+          : RENDER_CONFIGS.chesscom;
+    } else {
+      config = RENDER_CONFIGS.lichess;
+    }
+
+    const pgnExtractorFn =
+      platform === "chess.com"
+        ? PgnExtractor.fromChessCom.bind(PgnExtractor)
+        : PgnExtractor.fromLichess.bind(PgnExtractor);
+
+    return ButtonFactory.create({
+      ...config,
+      onClick: pgnExtractorFn,
     });
   }
 
-  function findGameReviewButton() {
-    ensureBasicInit();
+  const ButtonManager = (() => {
+    const targetCache = new Map();
+
+    const getRetryDelay = (attempts) =>
+      Math.min(
+        CONFIG.RETRY_DELAY * Math.pow(1.5, attempts),
+        CONFIG.LONG_RETRY_DELAY
+      ) * STATE.performanceFactor;
+
+    return {
+      addButton({
+        id,
+        buttonCreator,
+        targets,
+        attempts = 0,
+        retryFn,
+        checkExisting = true,
+      }) {
+        const existingInstance = STATE.buttonInstances.get(id);
+        if (
+          checkExisting &&
+          existingInstance &&
+          document.contains(existingInstance.button)
+        ) {
+          return true;
+        }
+        if (existingInstance && !document.contains(existingInstance.button)) {
+          STATE.buttonInstances.delete(id);
+        }
+
+        if (document.readyState !== "complete" && attempts < 5) {
+          setTimeout(
+            () => retryFn(attempts + 1),
+            (CONFIG.RETRY_DELAY / 2) * STATE.performanceFactor
+          );
+          return false;
+        }
+
+        const button = buttonCreator();
+        if (this._insertButtonDOM(id, button, targets)) {
+          return true;
+        }
+
+        if (attempts < CONFIG.MAX_ATTEMPTS - 1) {
+          setTimeout(() => retryFn(attempts + 1), getRetryDelay(attempts));
+        } else {
+          console.warn(Utils.getMsg("logMaxAttemptsReached", id));
+          setTimeout(
+            () => retryFn(0),
+            CONFIG.LONG_RETRY_DELAY * 2 * STATE.performanceFactor
+          );
+        }
+        return false;
+      },
+
+      _insertButtonDOM(id, button, targets) {
+        const sortedTargets = [...targets].sort(
+          (a, b) => (b.priority || 0) - (a.priority || 0)
+        );
+        const buttonSelectorClass =
+          STATE.platform === "lichess"
+            ? ".wintchess-aurora-button"
+            : ".wintchess-button";
+
+        for (const targetConfig of sortedTargets) {
+          const {
+            selector,
+            method = "append",
+            element: predefinedElement,
+          } = targetConfig;
+          let anchorElement = null;
+
+          if (predefinedElement && document.contains(predefinedElement)) {
+            anchorElement = predefinedElement;
+          } else if (typeof selector === "string") {
+            anchorElement =
+              Array.from(document.querySelectorAll(selector)).find(
+                (el) => el.offsetParent !== null
+              ) || document.querySelector(selector);
+          }
+
+          if (!anchorElement) continue;
+
+          // Check if a WintrChess button already exists relative to this anchor
+          const containerToCheck =
+            method === "append" || method === "prepend"
+              ? anchorElement
+              : anchorElement.parentNode;
+          if (!containerToCheck) continue;
+
+          let existingButtonFound = false;
+          if (
+            method === "append" &&
+            containerToCheck.querySelector(
+              `:scope > ${buttonSelectorClass}, :scope > .wintchess-button-container > ${buttonSelectorClass}`
+            )
+          ) {
+            existingButtonFound = true;
+          } else if (
+            (method === "after" || method === "afterend") &&
+            anchorElement.nextElementSibling &&
+            (anchorElement.nextElementSibling.matches(buttonSelectorClass) ||
+              anchorElement.nextElementSibling.querySelector(
+                buttonSelectorClass
+              ) ||
+              (anchorElement.nextElementSibling.classList.contains(
+                "wintchess-button-container"
+              ) &&
+                anchorElement.nextElementSibling.querySelector(
+                  buttonSelectorClass
+                )))
+          ) {
+            existingButtonFound = true;
+          } else if (
+            method === "prepend" &&
+            containerToCheck.querySelector(
+              `:scope > ${buttonSelectorClass}, :scope > .wintchess-button-container > ${buttonSelectorClass}`
+            )
+          ) {
+            existingButtonFound = true;
+          }
+          if (existingButtonFound && id !== "chesscom_gameover_modal") {
+            const currentInstance = STATE.buttonInstances.get(id);
+            if (
+              currentInstance &&
+              currentInstance.button &&
+              currentInstance.button.isConnected
+            ) {
+              // console.log(`[WintrChess] Button ${id} already exists at target via selector ${selector}.`);
+              return true;
+            }
+            // console.log(`[WintrChess] Another button exists or button ${id} not managed at target ${selector}. Skipping.`);
+            continue;
+          }
+
+          try {
+            let finalButtonContainer = button;
+            if (id === "chesscom_gameover_modal") {
+              finalButtonContainer = document.createElement("div");
+              finalButtonContainer.className =
+                "wintchess-button-container game-over-review-button-component";
+              finalButtonContainer.appendChild(button);
+            }
+
+            if (method === "append")
+              anchorElement.appendChild(finalButtonContainer);
+            else if (method === "prepend")
+              anchorElement.prepend(finalButtonContainer);
+            else if (method === "after" || method === "afterend")
+              anchorElement.after(finalButtonContainer);
+            else if (method === "before" || method === "beforebegin")
+              anchorElement.before(finalButtonContainer);
+            else
+              anchorElement.insertAdjacentElement(method, finalButtonContainer);
+
+            STATE.buttonInstances.set(id, {
+              button: finalButtonContainer,
+              element: anchorElement,
+              method,
+            });
+            return true;
+          } catch (error) {
+            console.warn(
+              `[WintrChess] Failed to insert button "${id}" with method "${method}" on selector "${
+                selector || "predefined"
+              }":`,
+              error
+            );
+          }
+        }
+        return false;
+      },
+
+      getTargetsForPlatform(platform) {
+        const platformKey = `targets_${platform}`;
+        if (targetCache.has(platformKey)) return targetCache.get(platformKey);
+
+        let platformTargets = [];
+        if (platform === "lichess") {
+          platformTargets = CONFIG.BUTTON_SELECTORS.LICHESS;
+        } else if (platform === "chess.com") {
+          platformTargets = [
+            ...CONFIG.BUTTON_SELECTORS.CHESS_COM,
+            ...CONFIG.BUTTON_SELECTORS.SHARED,
+          ];
+        }
+
+        targetCache.set(platformKey, platformTargets);
+        return platformTargets;
+      },
+
+      removeButtonById(id) {
+        const instance = STATE.buttonInstances.get(id);
+        if (instance && instance.button && instance.button.parentNode) {
+          instance.button.parentNode.removeChild(instance.button);
+        }
+        STATE.buttonInstances.delete(id);
+      },
+
+      removeAllButtons() {
+        STATE.buttonInstances.forEach(({ button }) => {
+          if (button && button.parentNode) {
+            button.parentNode.removeChild(button);
+          }
+        });
+        STATE.buttonInstances.clear();
+      },
+    };
+  })();
+
+  function tryAddWintrChessButton(platform, attempts = 0) {
+    ensureBaseInitialized();
+
+    if (platform === "chess.com") {
+      const pageInfo = getChessComPageInfo();
+      if (
+        pageInfo.isReviewPage &&
+        !document.querySelector(".game-over-modal-content")
+      ) {
+        ButtonManager.removeAllButtons();
+        return false;
+      }
+      if (tryAddButtonToChessComGameOverModal()) {
+        return true;
+      }
+      if (
+        STATE.buttonInstances.has("chesscom_gameover_modal") &&
+        !document.querySelector(
+          ".game-over-modal-content .wintchess-button-container"
+        )
+      ) {
+        ButtonManager.removeButtonById("chesscom_gameover_modal");
+      }
+    }
+
+    const buttonId = `${platform}_main`;
+    let targets = ButtonManager.getTargetsForPlatform(platform);
+
+    if (platform === "chess.com") {
+      const gameReviewButton = findChessComGameReviewButton();
+      if (gameReviewButton && gameReviewButton.parentNode) {
+        targets = [
+          { element: gameReviewButton, method: "afterend", priority: 100 },
+          ...targets,
+        ];
+      }
+    }
+
+    // Filter out game-over-modal-content selector for general chess.com button
+    // to prevent adding the standard button inside the modal.
+    if (platform === "chess.com") {
+      targets = targets.filter(
+        (t) => t.selector !== ".game-over-modal-content"
+      );
+    }
+
+    return ButtonManager.addButton({
+      id: buttonId,
+      buttonCreator: () => createWintrChessButton(platform, "default"),
+      targets: targets,
+      attempts: attempts,
+      retryFn: (newAttempts) => tryAddWintrChessButton(platform, newAttempts),
+    });
+  }
+
+  function tryAddButtonToChessComGameOverModal() {
+    // This function is Chess.com specific
+    if (STATE.platform !== "chess.com") return false;
+    ensureBaseInitialized();
+
+    const modalContent = document.querySelector(".game-over-modal-content");
+    if (!modalContent) return false;
+
+    const buttonId = "chesscom_gameover_modal";
+    if (
+      modalContent.querySelector(
+        ".wintchess-button-container.game-over-review-button-component .wintchess-button"
+      )
+    ) {
+      if (!STATE.buttonInstances.has(buttonId)) {
+        const btnInstance = modalContent.querySelector(
+          ".wintchess-button-container.game-over-review-button-component"
+        );
+        if (btnInstance) {
+          STATE.buttonInstances.set(buttonId, {
+            button: btnInstance,
+            element:
+              modalContent.querySelector(".game-over-modal-buttons") ||
+              modalContent,
+            method: "append",
+          });
+        }
+      }
+      return true;
+    }
+
+    const buttonList = modalContent.querySelector(".game-over-modal-buttons");
+    if (!buttonList) return false;
+
+    const targets = [
+      {
+        element: buttonList,
+        method: "append",
+        priority: 100,
+      },
+    ];
+
+    // Find the "Review Game" button to insert after, if possible and desired.
+    // This example will append to buttonList as per `targets` above.
+    // If you want to insert relative to "Review Game" button:
+    // const reviewGameButton = buttonList.querySelector(".game-over-review-button-component");
+    // if (reviewGameButton) {
+    //    targets = [{ element: reviewGameButton, method: "afterend", priority: 100 }];
+    // }
+
+    return ButtonManager.addButton({
+      id: buttonId,
+      buttonCreator: () => createWintrChessButton("chess.com", "gameOver"),
+      targets: targets,
+      attempts: 0,
+      retryFn: (newAttempts) => {
+        if (newAttempts < 2) tryAddButtonToChessComGameOverModal();
+      },
+      checkExisting: true,
+    });
+  }
+
+  function findChessComGameReviewButton() {
+    // Find Chess.com's native "Game Review" / "Bilan de la partie" button
     const reviewTerms = CONFIG.BUTTON_SELECTORS.REVIEW_TERMS;
     const selectors = [
-      "button.game-over-review-button-component",
+      ".game-over-buttons .game-over-review-button-component button", // Game Over screen
+      ".board-layout-sidebar .review-button-component button", // Analysis sidebar
       ".game-review-buttons-component > button.cc-button-component.cc-button-primary",
-      ".game-over-buttons-component .button-with-icon-primary",
       ".sidebar-buttons-container button.ui_v5-button-component.primary",
-      ".board-layout-sidebar .review-button-component button",
-      ".layout-sidebar .review-button-component button",
-      "button.cc-button-component.cc-button-primary.cc-button-xx-large.cc-bg-primary",
+      "button.cc-button-component.cc-button-primary.cc-button-xx-large",
       "button.cc-button-component.cc-button-primary",
     ];
 
     for (const selector of selectors) {
-      const buttons = document.querySelectorAll(
-        selector + ":not(.wintchess-button):not(.wintchess-aurora-button)"
-      );
+      const buttons = document.querySelectorAll(selector);
       for (const btn of buttons) {
-        const btnText = btn.textContent?.toLowerCase() || "";
-        const ariaLabel = btn.getAttribute("aria-label")?.toLowerCase() || "";
+        if (
+          btn.classList.contains("wintchess-button") ||
+          btn.closest(".wintchess-aurora-button")
+        )
+          continue;
+
+        const btnText = (btn.textContent || "").toLowerCase().trim();
+        const ariaLabel = (btn.getAttribute("aria-label") || "")
+          .toLowerCase()
+          .trim();
         if (
           reviewTerms.some(
             (term) => btnText.includes(term) || ariaLabel.includes(term)
@@ -1242,39 +1186,26 @@
             !btnText.includes("new game") &&
             !btnText.includes("nouvelle partie")
           ) {
-            return btn;
+            if (btn.offsetParent !== null) return btn;
           }
         }
       }
     }
-    const prominentButton = document.querySelector(
-      "button.cc-button-component.cc-button-xx-large:not(.wintchess-button):not(.wintchess-aurora-button), .post-game-buttons-component button:first-of-type:not(.wintchess-button):not(.wintchess-aurora-button)"
-    );
-    if (
-      prominentButton &&
-      reviewTerms.some((term) =>
-        prominentButton.textContent?.toLowerCase().includes(term)
-      )
-    ) {
-      return prominentButton;
-    }
     return null;
   }
 
-  // ===== WINTRCHESS FUNCTIONS =====
-  function initWintrChess() {
-    ensureBasicInit();
+  // --- WINTRCHESS.COM SPECIFIC LOGIC ---
+  function initWintrChessAutoPaste() {
     if (STATE.isSlowDevice) {
       NotificationManager.show(
-        getMsg("notificationWintrchessPreparingAnalysisSlow"),
+        Utils.getMsg("notificationWintrchessPreparingAnalysisSlow"),
         5000
       );
     }
-    pasteAndAnalyzeWintrChess();
+    pasteAndAnalyzeOnWintrChess();
   }
 
-  async function pasteAndAnalyzeWintrChess() {
-    ensureBasicInit();
+  async function pasteAndAnalyzeOnWintrChess() {
     const pgnToPaste = await chromeStorage.getValue(
       CONFIG.PGN_STORAGE_KEY,
       null
@@ -1288,7 +1219,6 @@
       "Analyze",
       "Analyze game",
     ];
-
     const selectorsConfig = [
       {
         textarea: "textarea.TerVPsT9aZ0soO8yjZU4",
@@ -1308,29 +1238,39 @@
     ].sort((a, b) => b.priority - a.priority);
 
     let attempts = 0;
-    const maxAttempts = 30;
-    let delayMs = STATE.isSlowDevice ? 500 : 300;
+    const maxAttempts = STATE.isSlowDevice ? 45 : 30;
+    let delayMs = (STATE.isSlowDevice ? 600 : 400) * STATE.performanceFactor;
 
-    const findElements = () => {
+    const findWintrChessElements = () => {
       for (const sel of selectorsConfig) {
         const textarea = document.querySelector(sel.textarea);
-        if (!textarea) continue;
-        const button = sel.button
-          ? document.querySelector(sel.button)
-          : sel.buttonText
-          ? findWintrChessButtonByText(sel.buttonText)
-          : null;
-        if (button) return { textarea, button };
+        if (!textarea || textarea.offsetParent === null) continue;
+
+        let button = null;
+        if (sel.button) {
+          button = document.querySelector(sel.button);
+        } else if (sel.buttonText) {
+          button = Array.from(
+            document.querySelectorAll("button:not([disabled])")
+          ).find(
+            (btn) =>
+              sel.buttonText.some((txt) =>
+                btn.textContent
+                  ?.toLowerCase()
+                  .trim()
+                  .includes(txt.toLowerCase())
+              ) && btn.offsetParent !== null
+          );
+        }
+        if (button && button.offsetParent !== null && !button.disabled)
+          return { textarea, button };
       }
       return null;
     };
 
-    const performPaste = async (textarea, button) => {
+    const performPasteAndClick = async (textarea, button) => {
       try {
         textarea.focus();
-        textarea.select();
-        await Utils.sleep(100);
-
         textarea.value = pgnToPaste;
         textarea.dispatchEvent(
           new Event("input", { bubbles: true, cancelable: true })
@@ -1338,7 +1278,8 @@
         textarea.dispatchEvent(
           new Event("change", { bubbles: true, cancelable: true })
         );
-        await Utils.sleep(STATE.isSlowDevice ? 600 : 300);
+
+        await Utils.sleep(100 * STATE.performanceFactor);
 
         if (!button.disabled) {
           button.click();
@@ -1347,7 +1288,7 @@
         }
         return false;
       } catch (error) {
-        console.error(getMsg("logWintrchessAutoPasteError"), error);
+        console.error(Utils.getMsg("logWintrchessAutoPasteError"), error);
         return false;
       }
     };
@@ -1357,17 +1298,17 @@
         const onVisible = () => {
           if (document.visibilityState === "visible") {
             document.removeEventListener("visibilitychange", onVisible);
-            setTimeout(attemptPasteRecursive, 500);
+            setTimeout(attemptPasteRecursive, 500 * STATE.performanceFactor);
           }
         };
         document.addEventListener("visibilitychange", onVisible);
         return;
       }
 
-      const elements = findElements();
+      const elements = findWintrChessElements();
       if (
         elements &&
-        (await performPaste(elements.textarea, elements.button))
+        (await performPasteAndClick(elements.textarea, elements.button))
       ) {
         return;
       }
@@ -1375,15 +1316,15 @@
       attempts++;
       if (attempts >= maxAttempts) {
         NotificationManager.show(
-          getMsg("notificationWintrchessAutoPasteFailed"),
+          Utils.getMsg("notificationWintrchessAutoPasteFailed"),
           5000
         );
         if (navigator.clipboard && pgnToPaste) {
           try {
             await navigator.clipboard.writeText(pgnToPaste);
             NotificationManager.show(
-              getMsg("notificationWintrchessAutoPasteFailedClipboard"),
-              5000
+              Utils.getMsg("notificationWintrchessAutoPasteFailedClipboard"),
+              6000
             );
           } catch (clipError) {
             console.error(
@@ -1392,50 +1333,34 @@
             );
           }
         }
+        await chromeStorage
+          .deleteValue(CONFIG.PGN_STORAGE_KEY)
+          .catch((e) =>
+            console.warn("Failed to clear PGN from storage on paste fail", e)
+          );
         return;
       }
 
-      delayMs = Math.min(delayMs * 1.2, CONFIG.LONG_RETRY_DELAY);
+      delayMs = Math.min(
+        delayMs * 1.15,
+        CONFIG.LONG_RETRY_DELAY * STATE.performanceFactor
+      );
       setTimeout(attemptPasteRecursive, delayMs);
     };
 
-    setTimeout(attemptPasteRecursive, STATE.isSlowDevice ? 800 : 500);
-  }
-
-  function findWintrChessButtonByText(textOptions) {
-    const optionsArray = Array.isArray(textOptions)
-      ? textOptions
-      : [textOptions];
-
-    const allButtons = Array.from(
-      document.querySelectorAll("button:not([disabled])")
+    setTimeout(
+      attemptPasteRecursive,
+      (STATE.isSlowDevice ? 800 : 500) * STATE.performanceFactor
     );
-    for (const text of optionsArray) {
-      const foundButton = allButtons.find((button) =>
-        button.textContent?.toLowerCase().includes(text.toLowerCase())
-      );
-      if (foundButton) return foundButton;
-    }
-    return null;
   }
 
-  const Utils = {
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    debounce: (fn, delay) => {
-      let timer = null;
-      return function (...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn.apply(this, args), delay);
-      };
-    },
-  };
-
-  // ===== MESSAGE LISTENER FOR ICON CLICK =====
+  // --- CHROME MESSAGE LISTENER (e.g., for icon click) ---
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "extractPgnFromIconClick") {
       (async () => {
         try {
-          ensureBasicInit();
+          if (!STATE.platform) STATE.platform = getPlatform();
+          ensureBaseInitialized();
 
           let pgn;
           if (STATE.platform === "lichess") {
@@ -1456,7 +1381,10 @@
           if (pgn) {
             sendResponse({ pgn: pgn });
           } else {
-            sendResponse({ error: "Failed to extract PGN (content script)." });
+            sendResponse({
+              error:
+                "Failed to extract PGN (content script). See console/notifications.",
+            });
           }
         } catch (e) {
           console.error(
@@ -1464,8 +1392,9 @@
             e
           );
           NotificationManager.show(
-            getMsg("notificationGenericErrorPrefix") +
-              (e.message || "Unknown PGN extraction error")
+            Utils.getMsg("notificationGenericErrorPrefix") +
+              (e.message || "Unknown PGN extraction error"),
+            5000
           );
           sendResponse({
             error:
@@ -1478,7 +1407,7 @@
     }
   });
 
-  // ===== BOOTSTRAP =====
+  // --- SCRIPT BOOTSTRAP ---
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
