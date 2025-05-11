@@ -129,10 +129,6 @@
     "message": "Compartir",
     "description": "Aria-label para el botón de compartir en Chess.com."
   },
-  "chessComShareButtonGenericText": {
-    "message": "compartir",
-    "description": "Contenido de texto genérico para el botón de compartir en Chess.com si falla el aria-label específico."
-  },
   "descriptionPgnTab": {
     "message": "pestaña PGN",
     "description": "Descripción para la función clickElementWithRetry."

@@ -129,10 +129,6 @@
     "message": "Share",
     "description": "Aria-label for the share button on Chess.com."
   },
-  "chessComShareButtonGenericText": {
-    "message": "share",
-    "description": "Generic text content for share button on Chess.com if specific aria-label fails."
-  },
   "descriptionPgnTab": {
     "message": "PGN tab",
     "description": "Description for clickElementWithRetry function."
