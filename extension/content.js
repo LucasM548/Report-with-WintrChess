@@ -688,30 +688,14 @@
       } finally {
         if (sharePanelOpened) {
           try {
-            const closeButtonSelectors = [
-              '[data-cy="share-menu-close-button"]',
-            ];
-
-            const closed = await clickElementWithRetry(
-              closeButtonSelectors,
-              "chessComCloseButtonAriaLabel",
-              3,
-              150
+            document.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: "Escape",
+                keyCode: 27,
+                bubbles: true,
+                cancelable: true,
+              })
             );
-
-            if (!closed) {
-              console.warn(
-                "[WintrChess] Failed to close share panel via button click. Trying Escape key."
-              );
-              document.dispatchEvent(
-                new KeyboardEvent("keydown", {
-                  key: "Escape",
-                  keyCode: 27,
-                  bubbles: true,
-                  cancelable: true,
-                })
-              );
-            }
           } catch (e) {
             console.warn(
               "[WintrChess] Non-critical error attempting to close share panel:",
