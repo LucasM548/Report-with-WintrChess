@@ -280,23 +280,37 @@
       isRelevantPage = false,
       isReviewPage = false;
 
-    if (/^\/game\/(live|daily|computer)\/\d+/.test(path)) {
+    const gameUrlRegex = /^\/game\/(live|daily|computer)\/(\d+)/;
+    const gameMatch = path.match(gameUrlRegex);
+    if (gameMatch) {
       isRelevantPage = true;
-      gameId = path.split("/").pop();
-    } else if (/^\/(analysis|game|play\/online|home|today)/.test(path)) {
+      gameId = gameMatch[2];
+    } else if (/^\/(analysis|game|play(\/|$)|home|today)/.test(path)) {
+      isRelevantPage = true;
+      const urlParams = new URLSearchParams(window.location.search);
+      gameId = urlParams.get("gameId") || urlParams.get("id") || null;
+    }
+
+    if (
+      /^\/analysis|^\/game-report|^\/game\/[^\/]+\/\d+\/review/.test(path) ||
+      document.querySelector(
+        ".game-report-container, .analysis-game-report-area, .game-review-buttons-component"
+      )
+    ) {
+      isReviewPage = true;
       isRelevantPage = true;
     }
 
     if (
-      /^\/analysis\/game\/(live|daily|computer)|^\/game-report|^\/analysis\/game-report/.test(
-        path
-      ) ||
-      document.querySelector(
-        ".game-report-container, .analysis-game-report-area"
-      )
+      path.startsWith("/play/computer") &&
+      document.querySelector(".game-over-modal-content")
     ) {
-      isReviewPage = true;
+      isRelevantPage = true;
     }
+    if (path.startsWith("/game/computer/")) {
+      isRelevantPage = true;
+    }
+
     return { isRelevantPage, gameId, isReviewPage };
   }
 
@@ -638,17 +652,7 @@
       try {
         const shareButtonSelectors = [
           ".icon-font-chess.share",
-          {
-            findFn: () =>
-              Array.from(
-                document.querySelectorAll("button, div[role='button']")
-              ).find(
-                (btn) =>
-                  /share|partager|compartir/i.test(
-                    Utils.getElementInnerText(btn)
-                  ) && !/shared game/i.test(Utils.getElementInnerText(btn))
-              ),
-          },
+          ".cc-icon-button-component.cc-icon-button-small.cc-icon-button-ghost.cc-bg-ghost",
         ];
         if (
           !(await clickElementWithRetry(
@@ -665,18 +669,6 @@
 
         const pgnTabSelectors = [
           'button#tab-pgn[aria-controls="tabpanel-pgn"]',
-          {
-            findFn: () =>
-              Array.from(
-                document.querySelectorAll(
-                  ".share-menu-tab button, .cc-tabs-component button, .modal-tabs button, nav.tabs button, .tabs-component button"
-                )
-              ).find((btn) =>
-                (Utils.getElementInnerText(btn) || "")
-                  .toUpperCase()
-                  .includes("PGN")
-              ),
-          },
         ];
         if (
           !(await clickElementWithRetry(
@@ -698,32 +690,6 @@
           try {
             const closeButtonSelectors = [
               '[data-cy="share-menu-close-button"]',
-              {
-                findFn: () =>
-                  Array.from(
-                    document.querySelectorAll(
-                      '.share-menu-container button, .modal-container button, .cc-modal-component button, .modal-dialog button, div[role="dialog"] button'
-                    )
-                  ).find(
-                    (btn) =>
-                      btn.offsetParent !== null &&
-                      !btn.disabled &&
-                      (/(close|fermer|cerrar|schließen)/i.test(
-                        Utils.getElementInnerText(btn) || ""
-                      ) ||
-                        /(close|fermer|cerrar|schließen)/i.test(
-                          btn.getAttribute("aria-label") || ""
-                        ) ||
-                        btn.querySelector(
-                          '[class*="icon-font-chess-close"], [class*="icon-font-chess-x"], [class*="remove"], [data-icon="cross"]'
-                        ) ||
-                        (btn.firstElementChild &&
-                          btn.firstElementChild.nodeName === "SPAN" &&
-                          /x|close|remove/i.test(
-                            btn.firstElementChild.className
-                          )))
-                  ),
-              },
             ];
 
             const closed = await clickElementWithRetry(
@@ -1213,27 +1179,18 @@
       ".game-controls-component",
       ".analysis-controls-component",
       ".post-game-controls-component",
-    ];
-
-    const specificButtonSelectors = [
-      ".review-button-component button",
-      ".game-review-buttons-component > button.cc-button-component.cc-button-primary",
+      ".game-over-modal-content",
     ];
 
     let candidateButtons = [];
-
-    for (const selector of specificButtonSelectors) {
-      document
-        .querySelectorAll(selector)
-        .forEach((btn) => candidateButtons.push(btn));
-    }
-
     for (const containerSelector of containerSelectors) {
       const container = document.querySelector(containerSelector);
       if (container) {
-        container
-          .querySelectorAll("button, [role='button']")
-          .forEach((btn) => candidateButtons.push(btn));
+        container.querySelectorAll("button, [role='button']").forEach((btn) => {
+          if (btn.offsetParent !== null) {
+            candidateButtons.push(btn);
+          }
+        });
       }
     }
 
@@ -1248,9 +1205,6 @@
       ) {
         continue;
       }
-      if (btn.offsetParent === null || btn.disabled) {
-        continue;
-      }
 
       const btnFullText = Utils.getElementInnerText(btn).toLowerCase();
       const ariaLabel = (btn.getAttribute("aria-label") || "")
@@ -1262,8 +1216,12 @@
       );
 
       if (isReviewButton) {
-        if (btnFullText.length > 3 || ariaLabel.length > 3) {
-          // console.log("[WintrChess] Found potential Game Review button:", btn, "Text:", btnFullText);
+        if (
+          btnFullText.length > 3 ||
+          ariaLabel.length > 3 ||
+          btn.querySelector(".icon-font-chess, svg")
+        ) {
+          // console.log("[WintrChess] Found potential Game Review button via container/general search:", btn, "Text:", btnFullText);
           return btn;
         }
       }
