@@ -1431,7 +1431,7 @@
   }
 
   // --- CHROME MESSAGE LISTENER ---
-  chrome.runtime.onMessage.addListener((request, sendResponse) => {
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "extractPgnFromIconClick") {
       (async () => {
         try {
