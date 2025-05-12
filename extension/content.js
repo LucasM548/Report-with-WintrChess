@@ -87,7 +87,6 @@
       ],
       LICHESS: [
         { selector: ".analyse__tools", method: "append", priority: 10 },
-        { selector: ".study__buttons", method: "append", priority: 9 },
         {
           selector: ".analyse__controls .left-buttons",
           method: "append",
@@ -266,24 +265,13 @@
 
   // --- PAGE INFO GETTERS ---
   function getLichessPageInfo() {
-    const pathParts = window.location.pathname.split("/").filter(Boolean);
-    const gameIdRegex = /^[a-zA-Z0-9]{8,}$/;
-    let gameId = null,
-      studyId = null,
-      isRelevantPage = false;
+    const path = window.location.pathname;
+    const gameIdRegex = /^\/([a-zA-Z0-9]{8})(?:\/(?:white|black))?(?:#\d+)?$/;
 
-    if (pathParts.length > 0) {
-      if (gameIdRegex.test(pathParts[0]) && pathParts[0] !== "study") {
-        isRelevantPage = true;
-        gameId = pathParts[0];
-      } else if (pathParts[0] === "study" && pathParts.length >= 2) {
-        isRelevantPage = true;
-        studyId = pathParts[1];
-      } else if (pathParts[0] === "analysis" && !pathParts[1]) {
-        isRelevantPage = true;
-      }
-    }
-    return { isRelevantPage, gameId, studyId };
+    return {
+      isRelevantPage: gameIdRegex.test(path) || path.startsWith("/analysis"),
+      gameId: gameIdRegex.test(path) ? path.split("/")[1] : null,
+    };
   }
 
   function getChessComPageInfo() {
@@ -315,12 +303,7 @@
   // --- DOM OBSERVER ---
   const DomObserverManager = {
     relevantClassesByPlatform: {
-      lichess: [
-        "analyse__tools",
-        "study__buttons",
-        "analyse__controls",
-        "round__app",
-      ],
+      lichess: ["analyse__tools", "analyse__controls", "round__app"],
       "chess.com": [
         "board-controls",
         "game-controls",
@@ -505,14 +488,12 @@
 
     async fromLichess() {
       ensureBaseInitialized();
-      const pageInfo = getLichessPageInfo();
-      const idToFetch = pageInfo.gameId || pageInfo.studyId;
+      const gameId = getLichessPageInfo();
 
-      if (!idToFetch) {
+      if (!gameId) {
         const pgnTextarea = document.querySelector(".pgn textarea");
-        if (pgnTextarea && pgnTextarea.value) {
-          return pgnTextarea.value.trim();
-        }
+        if (pgnTextarea?.value) return pgnTextarea.value.trim();
+
         console.log(Utils.getMsg("logPgnFetchNoId"));
         NotificationManager.show(
           Utils.getMsg("notificationPgnFetchError") + " (No game ID)",
@@ -521,18 +502,12 @@
         return null;
       }
 
-      const cacheKey = `lichess_${idToFetch}`;
+      const cacheKey = `lichess_${gameId}`;
       const cachedPgn = this._getFromCache(cacheKey);
-      if (cachedPgn) {
-        console.log(Utils.getMsg("logPgnFromCacheLichess"));
-        return cachedPgn;
-      }
+      if (cachedPgn) return cachedPgn;
 
       try {
-        const isStudy = !!pageInfo.studyId;
-        const apiUrl = isStudy
-          ? `https://lichess.org/study/${idToFetch}.pgn?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`
-          : `https://lichess.org/game/export/${idToFetch}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
+        const apiUrl = `https://lichess.org/game/export/${gameId}?pgnInJson=false&moves=true&tags=true&clocks=false&evals=false&opening=false`;
 
         const pgn = await this.fetchPgnViaBackground(apiUrl);
         if (pgn) this._setCache(cacheKey, pgn);
@@ -831,8 +806,7 @@
           } else if (
             !pgn &&
             STATE.platform === "lichess" &&
-            !getLichessPageInfo().gameId &&
-            !getLichessPageInfo().studyId
+            !getLichessPageInfo().gameId
           ) {
           }
         } catch (error) {

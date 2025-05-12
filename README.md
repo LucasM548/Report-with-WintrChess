@@ -56,12 +56,9 @@ Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrC
 
 - **Lichess**:
 
-  - Game pages (`lichess.org/{gameID}`)
-  - Study pages (`lichess.org/study/{studyID}`)
   - Analysis pages (`lichess.org/analysis`)
 
 - **Chess.com**:
-  - Daily games (`chess.com/game/daily`)
   - Computer games (`chess.com/game/computer`)
   - Analysis pages (`chess.com/analysis`)
   - Play interface (`chess.com/play`)
