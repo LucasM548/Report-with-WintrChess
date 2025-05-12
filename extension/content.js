@@ -502,7 +502,7 @@
 
     async fromLichess() {
       ensureBaseInitialized();
-      const gameId = getLichessPageInfo();
+      const gameId = getLichessPageInfo().gameId;
 
       if (!gameId) {
         const pgnTextarea = document.querySelector(".pgn textarea");
