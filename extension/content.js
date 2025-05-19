@@ -1236,8 +1236,8 @@
 
     const selectorsConfig = [
       {
-        textarea: "textarea.TerVPsT9aZ0soO8yjZU4",
-        button: "button.rHBNQrpvd7mwKp3HqjVQ.THArhyJIfuOy42flULV6",
+        textarea: "textarea.DbWNZqo5y6OjmoHmo4bb",
+        button: "button.rHBNQrpvd7mwKp3HqjVQ.vLCzVzc7Ab4d98HLOHUI",
       },
     ];
 
