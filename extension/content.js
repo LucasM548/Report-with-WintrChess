@@ -1236,39 +1236,56 @@
 
     const selectorsConfig = [
       {
-        textarea: "textarea.DbWNZqo5y6OjmoHmo4bb",
-        button: "button.rHBNQrpvd7mwKp3HqjVQ.vLCzVzc7Ab4d98HLOHUI",
+        textarea: "textarea",
+        buttonText: [
+          "analyse",
+          "analyser",
+          "विश्लेषण करें",
+          "विश्लेषण करा",
+          "Phân tích",
+          "analizar",
+          "analizuj",
+          "analyser",
+          "analysiere",
+          "复盘分析",
+        ],
       },
     ];
 
     let attempts = 0;
-    const maxAttempts = STATE.isSlowDevice ? 45 : 30;
+    const maxAttempts = STATE.isSlowDevice ? 10 : 5;
     let delayMs = (STATE.isSlowDevice ? 600 : 400) * STATE.performanceFactor;
 
     const findWintrChessElements = () => {
       for (const sel of selectorsConfig) {
         const textareas = document.querySelectorAll(sel.textarea);
         for (const textarea of textareas) {
-          if (!textarea || textarea.offsetParent === null) continue;
+          if (
+            !textarea ||
+            textarea.offsetParent === null ||
+            textarea.disabled ||
+            textarea.readOnly
+          ) {
+            continue;
+          }
 
           let button = null;
-          if (sel.button) {
-            button = document.querySelector(sel.button);
-          } else if (sel.buttonText && Array.isArray(sel.buttonText)) {
-            const commonParent = textarea.closest("form") || document.body;
-            button = Array.from(
-              commonParent.querySelectorAll("button:not([disabled])")
-            ).find(
-              (btn) =>
-                sel.buttonText.some((txt) =>
-                  (Utils.getElementInnerText(btn) || "")
-                    .toLowerCase()
-                    .includes(txt)
-                ) && btn.offsetParent !== null
-            );
-            if (!button) {
+          if (
+            sel.buttonText &&
+            Array.isArray(sel.buttonText) &&
+            sel.buttonText.length > 0
+          ) {
+            const potentialButtonContainers = [
+              textarea.parentElement?.parentElement,
+              document.body,
+            ];
+
+            for (const container of potentialButtonContainers) {
+              if (!container) continue;
               button = Array.from(
-                document.querySelectorAll("button:not([disabled])")
+                container.querySelectorAll(
+                  "button:not([disabled]), [role='button']:not([disabled])"
+                )
               ).find(
                 (btn) =>
                   sel.buttonText.some((txt) =>
@@ -1277,8 +1294,10 @@
                       .includes(txt)
                   ) && btn.offsetParent !== null
               );
+              if (button) break;
             }
           }
+
           if (button && button.offsetParent !== null && !button.disabled) {
             return { textarea, button };
           }
