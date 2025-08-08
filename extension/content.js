@@ -651,8 +651,13 @@
       let sharePanelOpened = false;
       try {
         const shareButtonSelectors = [
-          ".icon-font-chess.share",
-          ".cc-icon-button-component.cc-icon-button-small.cc-icon-button-ghost.cc-bg-ghost",
+          "[aria-label=Partager]",
+          "[aria-label=Share]",
+          "[aria-label=Teilen]",
+          "[aria-label=Compartir]",
+          "[aria-label=Condividere]",
+          "[aria-label=делиться]",
+          "a[aria-label=शेयर करें]",
         ];
         if (
           !(await clickElementWithRetry(
