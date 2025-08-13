@@ -2,6 +2,14 @@
   "use strict";
 
   // --- UTILITIES & HELPERS ---
+  /**
+   * Utility functions for common operations:
+   * 
+   * - sleep(ms): Returns a promise that resolves after a specified delay.
+   * - debounce(fn, delay): Returns a debounced version of the function that will postpone its execution until after a delay.
+   * - getMsg(messageKey, substitutions): Retrieves a localized message using a message key and optional substitutions.
+   * - getElementInnerText(element): Recursively extracts and returns the inner text of an HTML element, excluding script and style tags.
+   */
   const Utils = {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     debounce: (fn, delay) => {
@@ -46,21 +54,14 @@
     },
   };
 
-  const CHESS_ICON_SVG = `<svg viewBox="0 0 32 32" height="32" width="32" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path>
-  </svg>`;
-
   // --- CONFIGURATION ---
   const CONFIG = {
     WINTRCHESS_URL: "https://wintrchess.com/",
     PGN_STORAGE_KEY: "wintrChessPgnToPaste",
     BUTTON_TEXT_KEY: "buttonTextAnalyzeWintrChess",
-    MAX_ATTEMPTS: 50,
     RETRY_DELAY: 1000,
     LONG_RETRY_DELAY: 3000,
-    AUTO_PASTE_DELAY: 500,
     BUTTON_CHECK_INTERVAL: 5000,
-    DEBOUNCE_DELAY: 500,
     SLOW_DEVICE_THRESHOLD: 50,
     BUTTON_SELECTORS: {
       REVIEW_TERMS: [
@@ -79,6 +80,7 @@
         },
       ],
       CHESS_COM: [
+        { selector: ".game-review-emphasis-component", method: "append", priority: 18 },
         { selector: ".board-controls-bottom", method: "append", priority: 15 },
         { selector: ".analysis-controls", method: "append", priority: 14 },
         { selector: ".board-controls", method: "append", priority: 13 },
@@ -196,7 +198,6 @@
       .wintchess-aurora-button:hover:before { left: 100%; }
       .wintchess-aurora-button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); filter: brightness(1.1); }
       .wintchess-aurora-button:active { transform: translateY(0px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2); filter: brightness(0.95); }
-      .wintchess-aurora-button .wintchess-icon { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
       .wintchess-aurora-button .button-text { line-height: 1.2; white-space: nowrap; }
       @keyframes wintchessAuroraGradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
     `;
@@ -758,21 +759,14 @@
               action: "openWintrChess",
               url: CONFIG.WINTRCHESS_URL,
             });
-          } else if (
-            !pgn &&
-            STATE.platform === "lichess" &&
-            !getLichessPageInfo().gameId
-          ) {
           }
         } catch (error) {
           console.error("[WintrChess] Error on button click:", error);
         } finally {
           setTimeout(() => {
-            if (button && button.isConnected) {
-              button.disabled = false;
-              textElement.textContent = originalText;
-            }
-          }, 1500);
+            button.disabled = false;
+            textElement.textContent = originalText;
+          }, 700 * STATE.performanceFactor);
         }
       });
     },
@@ -782,19 +776,18 @@
     return {
       lichess: {
         className: "wintchess-aurora-button",
-        innerHTML: `<svg class="wintchess-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 26.5c5.8 0 10.5-4.7 10.5-10.5S21.8 5.5 16 5.5 5.5 10.2 5.5 16 10.2 26.5 16 26.5M12 14l3 3h-2v4h6v-4h-2l3-3h-2V9h-4v5z"></path></svg><span class="button-text">${localizedButtonText}</span>`,
+        innerHTML: `<span class="button-text">${localizedButtonText}</span>`,
       },
       chesscom: {
         className:
           "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-        style: `margin-top: 8px; width: 100%; margin-bottom: 6px;`,
-        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon">${CHESS_ICON_SVG}</span><span class="cc-button-one-line button-text">${localizedButtonText}</span>`,
+        style: `margin-top: 8px; width: calc(100% - 30px); margin-bottom: 6px; margin-left: 15px; margin-right: 15px;`,
+        innerHTML: `<span class="cc-button-one-line button-text">${localizedButtonText}</span>`,
       },
       chesscomGameOver: {
         className:
-          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full",
-        style: `width: 100%; margin-top: 3px; margin-bottom: 6px;`,
-        innerHTML: `<span class="cc-icon-glyph cc-icon-large cc-button-icon" style="flex-shrink: 0;">${CHESS_ICON_SVG}</span><span class="button-text" style="white-space: normal; overflow: visible; text-overflow: initial;">${localizedButtonText}</span>`,
+          "cc-button-component cc-button-primary cc-button-xx-large cc-bg-primary cc-button-full game-over-review-button-game-over-review-button",
+        innerHTML: `${localizedButtonText}`,
       },
     };
   }
@@ -835,6 +828,8 @@
         CONFIG.LONG_RETRY_DELAY
       ) * STATE.performanceFactor;
 
+    const MAX_ATTEMPTS = 50;
+
     return {
       addButton({
         id,
@@ -869,7 +864,7 @@
           return true;
         }
 
-        if (attempts < CONFIG.MAX_ATTEMPTS - 1) {
+        if (attempts < MAX_ATTEMPTS - 1) {
           setTimeout(() => retryFn(attempts + 1), getRetryDelay(attempts));
         } else {
           console.warn(Utils.getMsg("logMaxAttemptsReached", id));
@@ -1067,8 +1062,7 @@
     ensureBaseInitialized();
 
     if (platform === "chess.com") {
-      if (tryAddButtonToChessComGameOverModal()) {
-      }
+      tryAddButtonToChessComGameOverModal();
 
       if (
         STATE.buttonInstances.has("chesscom_gameover_modal") &&
@@ -1078,6 +1072,12 @@
         !document.querySelector(".game-over-modal-content .wintchess-button")
       ) {
         ButtonManager.removeButtonById("chesscom_gameover_modal");
+      }
+
+      // Skip adding the main button on the Chess.com home page to prevent unnecessary retries
+      const path = (window.location && window.location.pathname) || "";
+      if (path.replace(/\/$/, "") === "/home") {
+        return false;
       }
     }
 
@@ -1250,7 +1250,6 @@
           "Phân tích",
           "analizar",
           "analizuj",
-          "analyser",
           "analysiere",
           "复盘分析",
         ],
