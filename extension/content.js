@@ -145,24 +145,10 @@
   }
 
   function detectDevicePerformance() {
-    const startTime = performance.now();
-    for (let i = 0, counter = 0; i < 1000000; i++) counter++;
-    const duration = performance.now() - startTime;
-
-    if (duration > CONFIG.SLOW_DEVICE_THRESHOLD) {
-      STATE.isSlowDevice = true;
-      STATE.performanceFactor = Math.min(5, Math.max(1.5, duration / 20));
-      console.log(
-        Utils.getMsg(
-          "logSlowDeviceDetected",
-          STATE.performanceFactor.toFixed(2)
-        )
-      );
-    } else {
-      STATE.isSlowDevice = false;
-      STATE.performanceFactor = 1;
-      console.log(Utils.getMsg("logFastDeviceDetected", duration.toFixed(2)));
-    }
+    // Optimization: Assume fast device to avoid unnecessary delays.
+    // Modern browsers and devices handle this extension well.
+    STATE.isSlowDevice = false;
+    STATE.performanceFactor = 1;
   }
 
   function ensureBaseInitialized() {
@@ -352,23 +338,24 @@
 
       const mutationCallback = (mutationsList) => {
         for (const mutation of mutationsList) {
-          if (
-            (mutation.type === "childList" &&
-              mutation.addedNodes.length > 0 &&
-              Array.from(mutation.addedNodes).some(
-                (node) =>
-                  node.nodeType === Node.ELEMENT_NODE &&
-                  this.isElementOrContainsRelevant(
-                    node,
-                    platformRelevantClasses
-                  )
-              )) ||
-            (mutation.type === "attributes" &&
-              mutation.target.nodeType === Node.ELEMENT_NODE &&
-              this.isElementOrContainsRelevant(
-                mutation.target,
-                platformRelevantClasses
-              ))
+          if (mutation.type === "childList") {
+            for (let i = 0; i < mutation.addedNodes.length; i++) {
+              const node = mutation.addedNodes[i];
+              if (
+                node.nodeType === Node.ELEMENT_NODE &&
+                this.isElementOrContainsRelevant(node, platformRelevantClasses)
+              ) {
+                debouncedCallback();
+                return;
+              }
+            }
+          } else if (
+            mutation.type === "attributes" &&
+            mutation.target.nodeType === Node.ELEMENT_NODE &&
+            this.isElementOrContainsRelevant(
+              mutation.target,
+              platformRelevantClasses
+            )
           ) {
             debouncedCallback();
             return;
@@ -488,7 +475,8 @@
               );
             }
             if (response && response.success) {
-              resolve(response.data.trim());
+              // Handle both JSON and text responses
+              resolve(response.data);
             } else {
               reject(
                 new Error(
@@ -541,8 +529,10 @@
     async fromChessCom() {
       ensureBaseInitialized();
       const pageInfo = getChessComPageInfo();
+      const gameId = pageInfo.gameId;
+      
       const cacheKey = `chesscom_${
-        pageInfo.gameId || window.location.pathname.replace(/\//g, "_")
+        gameId || window.location.pathname.replace(/\//g, "_")
       }`;
       const cachedPgn = this._getFromCache(cacheKey);
       if (cachedPgn) {
@@ -550,14 +540,40 @@
         return cachedPgn;
       }
 
-      NotificationManager.show(
-        STATE.isSlowDevice
-          ? Utils.getMsg("notificationPgnExtractionSlowChessCom")
-          : Utils.getMsg("notificationPgnExtraction"),
-        STATE.isSlowDevice ? 8000 : 4000
-      );
+      // Strategy 1: Try Internal API (Fastest & Most Reliable)
+      if (gameId) {
+        try {
+          // Try callback API first (contains PGN in JSON)
+          const callbackUrl = `https://www.chess.com/callback/live/game/${gameId}`;
+          const data = await this.fetchPgnViaBackground(callbackUrl);
+          
+          if (data && data.game && data.game.pgn) {
+             const pgn = data.game.pgn;
+             this._setCache(cacheKey, pgn);
+             return pgn;
+          }
+        } catch (e) {
+          console.warn("[WintrChess] Chess.com callback API failed, trying fallback...", e);
+        }
 
-      if (STATE.isSlowDevice) await Utils.sleep(1000 * STATE.performanceFactor);
+        try {
+           // Fallback to pub API (returns raw PGN usually)
+           const pubUrl = `https://www.chess.com/pub/game/${gameId}`;
+           const pgn = await this.fetchPgnViaBackground(pubUrl);
+           if (pgn && typeof pgn === 'string' && pgn.includes('[Event')) {
+             this._setCache(cacheKey, pgn);
+             return pgn;
+           }
+        } catch (e) {
+           console.warn("[WintrChess] Chess.com pub API failed, falling back to UI scraping...", e);
+        }
+      }
+
+      // Strategy 2: UI Scraping (Fallback)
+      NotificationManager.show(
+        Utils.getMsg("notificationPgnExtraction"),
+        4000
+      );
 
       try {
         const pgn = await this._extractChessComPgnViaSharePanel();

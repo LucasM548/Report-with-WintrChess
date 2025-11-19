@@ -6,17 +6,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     fetch(request.url, {
       method: "GET",
       headers: {
-        Accept: "application/x-chess-pgn",
+        Accept: "application/json, application/x-chess-pgn, text/plain",
       },
     })
       .then((response) => {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return response.text();
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return response.json().then((json) => ({ type: "json", data: json }));
+        }
+        return response.text().then((text) => ({ type: "text", data: text }));
       })
-      .then((data) => {
-        sendResponse({ success: true, data: data });
+      .then((result) => {
+        sendResponse({ success: true, ...result });
       })
       .catch((error) => {
         console.error("[WintrChess Background] Fetch PGN error:", error);
