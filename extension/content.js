@@ -61,6 +61,7 @@
     BUTTON_TEXT_KEY: "buttonTextAnalyzeWintrChess",
     RETRY_DELAY: 1000,
     LONG_RETRY_DELAY: 3000,
+    DEBOUNCE_DELAY: 250,
     BUTTON_CHECK_INTERVAL: 5000,
     SLOW_DEVICE_THRESHOLD: 50,
     BUTTON_SELECTORS: {
@@ -107,7 +108,6 @@
     buttonInstances: new Map(),
     isSlowDevice: false,
     performanceFactor: 1,
-    lichessCssInjected: false,
   };
 
   // --- CHROME STORAGE WRAPPER ---
@@ -163,38 +163,6 @@
     STATE.isBaseInitialized = true;
   }
 
-  function injectLichessCustomButtonCss() {
-    if (STATE.lichessCssInjected) return;
-
-    const css = `
-      .wintchess-aurora-button {
-        display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 20px;
-        border-radius: 8px; font-family: 'Noto Sans', sans-serif; font-size: 0.95em; font-weight: 600;
-        color: #ffffff; cursor: pointer; border: none; outline: none; position: relative;
-        overflow: hidden; transition: all 0.3s ease; width: 97%; box-sizing: border-box;
-        margin: 10px auto; background: linear-gradient(135deg, #483D8B, #6A5ACD, #836FFF, #9370DB);
-        background-size: 300% 300%; animation: wintchessAuroraGradientFlow 10s ease infinite;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-      }
-      .wintchess-aurora-button:before {
-        content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-        transition: left 0.6s ease;
-      }
-      .wintchess-aurora-button:hover:before { left: 100%; }
-      .wintchess-aurora-button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); filter: brightness(1.1); }
-      .wintchess-aurora-button:active { transform: translateY(0px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2); filter: brightness(0.95); }
-      .wintchess-aurora-button .button-text { line-height: 1.2; white-space: nowrap; }
-      @keyframes wintchessAuroraGradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-    `;
-    const styleElement = document.createElement("style");
-    styleElement.type = "text/css";
-    styleElement.id = "wintchess-custom-lichess-style";
-    styleElement.appendChild(document.createTextNode(css));
-    (document.head || document.documentElement).appendChild(styleElement);
-    STATE.lichessCssInjected = true;
-  }
-
   function init() {
     STATE.platform = getPlatform();
     if (!STATE.platform) return;
@@ -203,7 +171,6 @@
     detectDevicePerformance();
 
     if (STATE.platform === "lichess") {
-      injectLichessCustomButtonCss();
       initializeSupportedPlatform("lichess", getLichessPageInfo);
     } else if (STATE.platform === "chess.com") {
       initializeSupportedPlatform("chess.com", getChessComPageInfo);
@@ -318,12 +285,27 @@
       ],
     },
     relevantNodeNames: new Set(["chess-board", "vertical-move-list"]),
+    
+    _cachedSelectors: new Map(),
+
+    getCombinedSelector(platform) {
+      if (this._cachedSelectors.has(platform)) {
+        return this._cachedSelectors.get(platform);
+      }
+
+      const classes = this.relevantClassesByPlatform[platform] || [];
+      const classSelectors = classes.map(c => "." + c.split(" ").join("."));
+      const nodeSelectors = Array.from(this.relevantNodeNames);
+      
+      const combined = [...classSelectors, ...nodeSelectors].join(",");
+      this._cachedSelectors.set(platform, combined);
+      return combined;
+    },
 
     setupObserver(callback, platform) {
       this.disconnect();
-      const platformRelevantClasses = new Set(
-        this.relevantClassesByPlatform[platform] || []
-      );
+      const combinedSelector = this.getCombinedSelector(platform);
+      
       const observerConfig = {
         childList: true,
         subtree: true,
@@ -333,33 +315,36 @@
 
       const debouncedCallback = Utils.debounce(
         callback,
-        CONFIG.DEBOUNCE_DELAY * STATE.performanceFactor
+        CONFIG.DEBOUNCE_DELAY * STATE.performanceFactor || 200 // Default to 200 if not set
       );
 
       const mutationCallback = (mutationsList) => {
+        let shouldTrigger = false;
+        
         for (const mutation of mutationsList) {
           if (mutation.type === "childList") {
             for (let i = 0; i < mutation.addedNodes.length; i++) {
               const node = mutation.addedNodes[i];
-              if (
-                node.nodeType === Node.ELEMENT_NODE &&
-                this.isElementOrContainsRelevant(node, platformRelevantClasses)
-              ) {
-                debouncedCallback();
-                return;
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                if (combinedSelector && (node.matches(combinedSelector) || node.querySelector(combinedSelector))) {
+                   shouldTrigger = true;
+                   break;
+                }
               }
             }
           } else if (
             mutation.type === "attributes" &&
-            mutation.target.nodeType === Node.ELEMENT_NODE &&
-            this.isElementOrContainsRelevant(
-              mutation.target,
-              platformRelevantClasses
-            )
+            mutation.target.nodeType === Node.ELEMENT_NODE
           ) {
-            debouncedCallback();
-            return;
+             if (combinedSelector && mutation.target.matches(combinedSelector)) {
+               shouldTrigger = true;
+             }
           }
+          if (shouldTrigger) break;
+        }
+        
+        if (shouldTrigger) {
+          debouncedCallback();
         }
       };
 
@@ -372,32 +357,6 @@
         STATE.domObserver.disconnect();
         STATE.domObserver = null;
       }
-    },
-
-    isElementOrContainsRelevant(element, platformRelevantClasses) {
-      if (!element || typeof element.matches !== "function") return false;
-      if (this.isRelevantSingleElement(element, platformRelevantClasses))
-        return true;
-      for (const cls of platformRelevantClasses) {
-        if (element.querySelector(`.${cls.split(" ").join(".")}`)) return true;
-      }
-      for (const nodeName of this.relevantNodeNames) {
-        if (element.querySelector(nodeName)) return true;
-      }
-      return false;
-    },
-
-    isRelevantSingleElement(element, platformRelevantClasses) {
-      if (!element || !element.classList) return false;
-      for (const className of platformRelevantClasses) {
-        if (
-          className
-            .split(" ")
-            .every((part) => element.classList.contains(part.replace(".", "")))
-        )
-          return true;
-      }
-      return this.relevantNodeNames.has(element.nodeName.toLowerCase());
     },
   };
 
@@ -553,7 +512,7 @@
              return pgn;
           }
         } catch (e) {
-          console.warn("[WintrChess] Chess.com callback API failed, trying fallback...", e);
+          console.log("[WintrChess] Callback API failed, trying fallback...");
         }
 
         try {
@@ -565,7 +524,7 @@
              return pgn;
            }
         } catch (e) {
-           console.warn("[WintrChess] Chess.com pub API failed, falling back to UI scraping...", e);
+           console.log("[WintrChess] Pub API failed, falling back to UI scraping...");
         }
       }
 
@@ -713,7 +672,7 @@
             document.dispatchEvent(
               new KeyboardEvent("keydown", {
                 key: "Escape",
-                keyCode: 27,
+                code: "Escape",
                 bubbles: true,
                 cancelable: true,
               })
@@ -727,7 +686,7 @@
             document.dispatchEvent(
               new KeyboardEvent("keydown", {
                 key: "Escape",
-                keyCode: 27,
+                code: "Escape",
                 bubbles: true,
                 cancelable: true,
               })
@@ -1353,62 +1312,54 @@
       }
     };
 
-    const attemptPasteRecursive = async () => {
-      if (document.visibilityState === "hidden") {
-        const onVisible = () => {
-          if (document.visibilityState === "visible") {
-            document.removeEventListener("visibilitychange", onVisible);
-            setTimeout(attemptPasteRecursive, 500 * STATE.performanceFactor);
-          }
-        };
-        document.addEventListener("visibilitychange", onVisible);
-        return;
-      }
+    const MAX_WAIT_TIME = 15000;
+    
+    // Check immediately
+    const initialElements = findWintrChessElements();
+    if (initialElements && (await performPasteAndClick(initialElements.textarea, initialElements.button))) {
+      return;
+    }
 
-      const elements = findWintrChessElements();
-      if (
-        elements &&
-        (await performPasteAndClick(elements.textarea, elements.button))
-      ) {
-        return;
-      }
+    let observer = null;
+    let timeoutId = null;
 
-      attempts++;
-      if (attempts >= maxAttempts) {
-        let failMessage = Utils.getMsg("notificationWintrchessAutoPasteFailed");
-        if (navigator.clipboard && pgnToPaste) {
-          try {
-            await navigator.clipboard.writeText(pgnToPaste);
-            failMessage = Utils.getMsg(
-              "notificationWintrchessAutoPasteFailedClipboard"
-            );
-          } catch (clipError) {
-            console.error(
-              "[WintrChess] Failed to copy PGN to clipboard:",
-              clipError
-            );
-          }
-        }
-        NotificationManager.show(failMessage, 6000);
-        await chromeStorage
-          .deleteValue(CONFIG.PGN_STORAGE_KEY)
-          .catch((e) =>
-            console.warn("Failed to clear PGN from storage on paste fail", e)
-          );
-        return;
-      }
-
-      delayMs = Math.min(
-        delayMs * 1.15,
-        CONFIG.LONG_RETRY_DELAY * STATE.performanceFactor
-      );
-      setTimeout(attemptPasteRecursive, delayMs);
+    const cleanup = () => {
+       if (observer) observer.disconnect();
+       if (timeoutId) clearTimeout(timeoutId);
     };
 
-    setTimeout(
-      attemptPasteRecursive,
-      (STATE.isSlowDevice ? 800 : 500) * STATE.performanceFactor
-    );
+    const handleMutation = async () => {
+       if (document.visibilityState === "hidden") return;
+       const elements = findWintrChessElements();
+       if (elements) {
+          if (await performPasteAndClick(elements.textarea, elements.button)) {
+             cleanup();
+          }
+       }
+    };
+
+    const debouncedHandle = Utils.debounce(handleMutation, 200);
+
+    observer = new MutationObserver(debouncedHandle);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Fallback timeout to stop looking
+    timeoutId = setTimeout(async () => {
+      cleanup();
+      
+      let failMessage = Utils.getMsg("notificationWintrchessAutoPasteFailed");
+      if (navigator.clipboard && pgnToPaste) {
+          try {
+            await navigator.clipboard.writeText(pgnToPaste);
+            failMessage = Utils.getMsg("notificationWintrchessAutoPasteFailedClipboard");
+          } catch (clipError) {
+            console.error("[WintrChess] Failed to copy PGN to clipboard:", clipError);
+          }
+      }
+      NotificationManager.show(failMessage, 6000);
+      await chromeStorage.deleteValue(CONFIG.PGN_STORAGE_KEY).catch(e => console.warn("Failed to clear PGN", e));
+
+    }, MAX_WAIT_TIME);
   }
 
   // --- CHROME MESSAGE LISTENER ---

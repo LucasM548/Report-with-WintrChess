@@ -1,0 +1,71 @@
+.wintchess-aurora-button {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 10px !important;
+    padding: 10px 20px !important;
+    border-radius: 8px !important;
+    font-family: 'Noto Sans', sans-serif !important;
+    font-size: 0.95em !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+    cursor: pointer !important;
+    border: none !important;
+    outline: none !important;
+    position: relative !important;
+    overflow: hidden !important;
+    transition: all 0.3s ease !important;
+    width: 97% !important;
+    box-sizing: border-box !important;
+    margin: 10px auto !important;
+    background: linear-gradient(135deg, #483D8B, #6A5ACD, #836FFF, #9370DB) !important;
+    background-size: 300% 300% !important;
+    animation: wintchessAuroraGradientFlow 10s ease infinite !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+}
+
+.wintchess-aurora-button:before {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: -100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent) !important;
+    transition: left 0.6s ease !important;
+}
+
+.wintchess-aurora-button:hover:before {
+    left: 100% !important;
+}
+
+.wintchess-aurora-button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+    filter: brightness(1.1) !important;
+}
+
+.wintchess-aurora-button:active {
+    transform: translateY(0px) !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2) !important;
+    filter: brightness(0.95) !important;
+}
+
+.wintchess-aurora-button .button-text {
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+}
+
+@keyframes wintchessAuroraGradientFlow {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
