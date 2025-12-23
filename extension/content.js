@@ -58,6 +58,7 @@
   const CONFIG = {
     WINTRCHESS_URL: "https://wintrchess.com/",
     PGN_STORAGE_KEY: "wintrChessPgnToPaste",
+    ORIENTATION_STORAGE_KEY: "wintrChessOrientation",
     BUTTON_TEXT_KEY: "buttonTextAnalyzeWintrChess",
     RETRY_DELAY: 1000,
     LONG_RETRY_DELAY: 3000,
@@ -142,6 +143,22 @@
     if (hostname.includes("www.chess.com")) return "chess.com";
     if (hostname.includes("wintrchess.com")) return "wintrchess";
     return null;
+  }
+
+  function getBoardOrientation(platform) {
+    if (platform === "lichess") {
+      // Lichess adds .orientation-black to .cg-wrap or body
+      if (document.querySelector(".orientation-black")) return "black";
+      // Fallback: check URL for /black (common in analysis/study)
+      if (window.location.pathname.includes("/black")) return "black";
+      return "white";
+    } else if (platform === "chess.com") {
+      // Chess.com adds .flipped to chess-board or .board
+      if (document.querySelector(".flipped") || document.querySelector(".board.flipped")) return "black";
+      // Sometimes it's in the sidebar or player details, but board class is most reliable for visuals
+      return "white";
+    }
+    return "white";
   }
 
   function detectDevicePerformance() {
@@ -730,6 +747,16 @@
           const pgn = await onClickHandler();
           if (pgn) {
             await chromeStorage.setValue(CONFIG.PGN_STORAGE_KEY, pgn);
+            
+            // Detect and store orientation
+            const orientation = getBoardOrientation(STATE.platform);
+            if (orientation === "black") {
+               await chromeStorage.setValue(CONFIG.ORIENTATION_STORAGE_KEY, "black");
+            } else {
+               // Ensure we don't carry over old state
+               await chromeStorage.deleteValue(CONFIG.ORIENTATION_STORAGE_KEY);
+            }
+
             chrome.runtime.sendMessage({
               action: "openWintrChess",
               url: CONFIG.WINTRCHESS_URL,
@@ -1202,7 +1229,36 @@
         5000
       );
     }
+
     pasteAndAnalyzeOnWintrChess();
+    handleAutoFlipOnWintrChess();
+  }
+
+  async function handleAutoFlipOnWintrChess() {
+    const orientation = await chromeStorage.getValue(CONFIG.ORIENTATION_STORAGE_KEY, null);
+    if (orientation !== "black") return;
+
+    // Clear it immediately effectively marking it as "handled" for this session open
+    await chromeStorage.deleteValue(CONFIG.ORIENTATION_STORAGE_KEY);
+
+    const flipButtonSelector = 'button[data-tooltip-id="options-toolbar-flip"]';
+    const MAX_ATTEMPTS = 20;
+    
+    // Simple poller for the flip button
+    let attempts = 0;
+    const intervalId = setInterval(() => {
+        attempts++;
+        const btn = document.querySelector(flipButtonSelector);
+        if (btn) {
+            // Optional: check if board is already flipped if possible, but usually clicking flips it.
+            // WintrChess seems to default to white.
+            console.log("[WintrChess] Auto-flipping board to Black.");
+            btn.click();
+            clearInterval(intervalId);
+        } else if (attempts >= MAX_ATTEMPTS) {
+            clearInterval(intervalId);
+        }
+    }, 500);
   }
 
   async function pasteAndAnalyzeOnWintrChess() {
