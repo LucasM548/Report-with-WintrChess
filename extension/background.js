@@ -23,7 +23,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, ...result });
       })
       .catch((error) => {
-        console.error("[WintrChess Background] Fetch PGN error:", error);
+        console.log("[WintrChess Notification] Fetch PGN error:", error);
         sendResponse({ success: false, error: error.message });
       });
     return true;
@@ -39,8 +39,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.pgn) {
       chrome.storage.local.set({ [PGN_STORAGE_KEY]: request.pgn }, () => {
         if (chrome.runtime.lastError) {
-          console.error(
-            "[WintrChess Background] Error setting PGN in storage:",
+          console.log(
+            "[WintrChess Notification] Error setting PGN in storage:",
             chrome.runtime.lastError
           );
           sendResponse({ success: false, error: "Storage error" });
@@ -50,8 +50,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true });
       });
     } else {
-      console.error(
-        "[WintrChess Background] No PGN provided to storePgnAndOpenWintrChess"
+      console.log(
+        "[WintrChess Notification] No PGN provided to storePgnAndOpenWintrChess"
       );
       sendResponse({ success: false, error: "No PGN provided" });
     }
@@ -75,18 +75,18 @@ chrome.action.onClicked.addListener(async (tab) => {
         await chrome.storage.local.set({ [PGN_STORAGE_KEY]: response.pgn });
         chrome.tabs.create({ url: WINTRCHESS_URL });
       } else if (response && response.error) {
-        console.error(
-          "[WintrChess Background] Error from content script during icon click:",
+        console.log(
+          "[WintrChess Notification] Error from content script during icon click:",
           response.error
         );
       } else {
-        console.error(
-          "[WintrChess Background] No PGN or invalid response from content script after icon click."
+        console.log(
+          "[WintrChess Notification] No PGN or invalid response from content script after icon click."
         );
       }
     } catch (error) {
-      console.error(
-        "[WintrChess Background] Error sending message to content script or processing response:",
+      console.log(
+        "[WintrChess Notification] Error sending message to content script or processing response:",
         error.message
       );
     }

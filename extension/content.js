@@ -23,8 +23,8 @@
       try {
         return chrome.i18n.getMessage(messageKey, substitutions) || messageKey;
       } catch (e) {
-        console.warn(
-          `[WintrChess] Missing/Error for i18n key: ${messageKey}`,
+        console.log(
+          `[WintrChess Notification] Missing/Error for i18n key: ${messageKey}`,
           e
         );
         if (typeof substitutions === "string")
@@ -475,7 +475,7 @@
         if (pgn) this._setCache(cacheKey, pgn);
         return pgn;
       } catch (error) {
-        console.error(Utils.getMsg("logPgnFetchApiErrorLichess"), error);
+        console.log(Utils.getMsg("logPgnFetchApiErrorLichess"), error);
         NotificationManager.show(
           Utils.getMsg("notificationPgnFetchError") +
             ` (Lichess API: ${error.message})`,
@@ -539,7 +539,7 @@
         if (pgn) this._setCache(cacheKey, pgn);
         return pgn;
       } catch (error) {
-        console.error("[WintrChess] Error extracting Chess.com PGN:", error);
+        console.log("[WintrChess Notification] Error extracting Chess.com PGN:", error);
         NotificationManager.show(
           Utils.getMsg("notificationPgnExtractionError") + `: ${error.message}`,
           5000
@@ -584,7 +584,7 @@
               getAdjustedDelay(baseAttemptDelay) * (attempt + 1)
             );
         }
-        console.error(
+        console.log(
           Utils.getMsg("logSharePanelClickFailed", [
             Utils.getMsg(descriptionKey),
             maxAttempts.toString(),
@@ -678,8 +678,8 @@
               })
             );
           } catch (e) {
-            console.warn(
-              "[WintrChess] Non-critical error attempting to close share panel:",
+            console.log(
+              "[WintrChess Notification] Non-critical error attempting to close share panel:",
               e.message,
               ". Trying Escape key as fallback."
             );
@@ -736,7 +736,7 @@
             });
           }
         } catch (error) {
-          console.error("[WintrChess] Error on button click:", error);
+          console.log("[WintrChess Notification] Error on button click:", error);
         } finally {
           setTimeout(() => {
             button.disabled = false;
@@ -842,7 +842,7 @@
         if (attempts < MAX_ATTEMPTS - 1) {
           setTimeout(() => retryFn(attempts + 1), getRetryDelay(attempts));
         } else {
-          console.warn(Utils.getMsg("logMaxAttemptsReached", id));
+          console.log(Utils.getMsg("logMaxAttemptsReached", id));
           setTimeout(
             () => retryFn(0),
             CONFIG.LONG_RETRY_DELAY * 3 * STATE.performanceFactor
@@ -974,8 +974,8 @@
             });
             return true;
           } catch (error) {
-            console.warn(
-              `[WintrChess] Failed to insert button "${id}" with method "${method}" on selector "${
+            console.log(
+              `[WintrChess Notification] Failed to insert button "${id}" with method "${method}" on selector "${
                 selector || "predefined"
               }":`,
               error
@@ -1307,7 +1307,7 @@
         }
         return false;
       } catch (error) {
-        console.error(Utils.getMsg("logWintrchessAutoPasteError"), error);
+        console.log(Utils.getMsg("logWintrchessAutoPasteError"), error);
         return false;
       }
     };
@@ -1353,11 +1353,11 @@
             await navigator.clipboard.writeText(pgnToPaste);
             failMessage = Utils.getMsg("notificationWintrchessAutoPasteFailedClipboard");
           } catch (clipError) {
-            console.error("[WintrChess] Failed to copy PGN to clipboard:", clipError);
+            console.log("[WintrChess Notification] Failed to copy PGN to clipboard:", clipError);
           }
       }
       NotificationManager.show(failMessage, 6000);
-      await chromeStorage.deleteValue(CONFIG.PGN_STORAGE_KEY).catch(e => console.warn("Failed to clear PGN", e));
+      await chromeStorage.deleteValue(CONFIG.PGN_STORAGE_KEY).catch(e => console.log("Failed to clear PGN", e));
 
     }, MAX_WAIT_TIME);
   }
@@ -1376,8 +1376,8 @@
           } else if (STATE.platform === "chess.com") {
             pgn = await PgnExtractor.fromChessCom();
           } else {
-            console.warn(
-              "[WintrChess] Icon click on unsupported page for PGN extraction:",
+            console.log(
+              "[WintrChess Notification] Icon click on unsupported page for PGN extraction:",
               window.location.hostname
             );
             sendResponse({
@@ -1395,8 +1395,8 @@
             });
           }
         } catch (e) {
-          console.error(
-            "[WintrChess] Error during icon click PGN extraction (content.js):",
+          console.log(
+            "[WintrChess Notification] Error during icon click PGN extraction (content.js):",
             e
           );
           NotificationManager.show(
