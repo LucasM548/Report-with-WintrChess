@@ -6,7 +6,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     fetch(request.url, {
       method: "GET",
       headers: {
-        Accept: "application/json, application/x-chess-pgn, text/plain",
+        Accept: "application/x-chess-pgn, text/plain, */*",
       },
     })
       .then((response) => {

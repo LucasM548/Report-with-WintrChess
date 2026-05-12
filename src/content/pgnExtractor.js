@@ -33,7 +33,11 @@ export const PgnExtractor = {
             );
           }
           if (response && response.success) {
-            resolve(response.data);
+            let pgnText = response.data;
+            if (typeof pgnText === 'object' && pgnText !== null) {
+              pgnText = pgnText.pgn || JSON.stringify(pgnText);
+            }
+            resolve(pgnText);
           } else {
             reject(
               new Error(
