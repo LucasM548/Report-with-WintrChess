@@ -69,3 +69,10 @@
         background-position: 0% 50%;
     }
 }
+
+.wintchess-button-container.game-over-review-button-component {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}

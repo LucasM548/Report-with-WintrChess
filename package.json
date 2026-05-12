@@ -1,0 +1,27 @@
+{
+  "name": "report-with-wintrchess",
+  "version": "1.0.0",
+  "description": "Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrChess](https://wintrchess.com/)** for in-depth analysis. Available as both a Chrome extension.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "watch": "vite build --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucas-martinati/Report-with-WintrChess.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lucas-martinati/Report-with-WintrChess/issues"
+  },
+  "homepage": "https://github.com/lucas-martinati/Report-with-WintrChess#readme",
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.4.0",
+    "vite": "^8.0.12"
+  }
+}
