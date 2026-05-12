@@ -213,17 +213,11 @@ export const ButtonManager = (() => {
         try {
           let finalButtonContainer = button;
           if (id === "chesscom_gameover_modal") {
-            let container = anchorElement.querySelector(".wintchess-button-container.game-over-review-button-component");
-            if (!container) {
-              container = document.createElement("div");
-              container.className = "wintchess-button-container game-over-review-button-component";
-            } else {
-              while (container.firstChild) container.removeChild(container.firstChild);
+            let existingContainer = anchorElement.querySelector(".wintchess-button-container.game-over-review-button-component");
+            if (existingContainer) {
+              existingContainer.remove();
             }
-            container.style.marginTop = "12px";
-            container.style.marginBottom = "8px";
-            container.appendChild(button);
-            finalButtonContainer = container;
+            finalButtonContainer.classList.add("game-over-review-button-component");
           }
 
           if (method === "append") anchorElement.appendChild(finalButtonContainer);
