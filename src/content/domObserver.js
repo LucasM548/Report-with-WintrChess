@@ -61,7 +61,7 @@ export const DomObserverManager = {
 
     const debouncedCallback = Utils.debounce(
       callback,
-      CONFIG.DEBOUNCE_DELAY * STATE.performanceFactor || 200
+      CONFIG.DEBOUNCE_DELAY
     );
 
     this._animationListener = (event) => {

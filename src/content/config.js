@@ -1,15 +1,15 @@
 import { Utils } from './utils.js';
+import { WINTRCHESS_URL, PGN_STORAGE_KEY, ORIENTATION_STORAGE_KEY } from '../shared/constants.js';
 
 export const CONFIG = {
-  WINTRCHESS_URL: "https://wintrchess.com/",
-  PGN_STORAGE_KEY: "wintrChessPgnToPaste",
-  ORIENTATION_STORAGE_KEY: "wintrChessOrientation",
+  WINTRCHESS_URL,
+  PGN_STORAGE_KEY,
+  ORIENTATION_STORAGE_KEY,
   BUTTON_TEXT_KEY: "buttonTextAnalyzeWintrChess",
   RETRY_DELAY: 1000,
   LONG_RETRY_DELAY: 3000,
   DEBOUNCE_DELAY: 250,
   BUTTON_CHECK_INTERVAL: 5000,
-  SLOW_DEVICE_THRESHOLD: 50,
   BUTTON_SELECTORS: {
     REVIEW_TERMS: [
       "Game Review",

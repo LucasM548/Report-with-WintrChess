@@ -76,7 +76,7 @@ const ButtonFactory = {
         setTimeout(() => {
           button.disabled = false;
           textElement.textContent = originalText;
-        }, 700 * STATE.performanceFactor);
+        }, 700);
       }
     });
   },
@@ -131,7 +131,7 @@ export const ButtonManager = (() => {
   const targetCache = new Map();
 
   const getRetryDelay = (attempts) =>
-    Math.min(CONFIG.RETRY_DELAY * Math.pow(1.5, attempts), CONFIG.LONG_RETRY_DELAY) * STATE.performanceFactor;
+    Math.min(CONFIG.RETRY_DELAY * Math.pow(1.5, attempts), CONFIG.LONG_RETRY_DELAY);
 
   const MAX_ATTEMPTS = 50;
 
@@ -146,7 +146,7 @@ export const ButtonManager = (() => {
       }
 
       if (document.readyState !== "complete" && attempts < 5) {
-        setTimeout(() => retryFn(attempts + 1), (CONFIG.RETRY_DELAY / 2) * STATE.performanceFactor);
+        setTimeout(() => retryFn(attempts + 1), CONFIG.RETRY_DELAY / 2);
         return false;
       }
 
@@ -158,8 +158,8 @@ export const ButtonManager = (() => {
       if (attempts < MAX_ATTEMPTS - 1) {
         setTimeout(() => retryFn(attempts + 1), getRetryDelay(attempts));
       } else {
+        // Give up definitively after MAX_ATTEMPTS — don't retry infinitely
         console.log(Utils.getMsg("logMaxAttemptsReached", id));
-        setTimeout(() => retryFn(0), CONFIG.LONG_RETRY_DELAY * 3 * STATE.performanceFactor);
       }
       return false;
     },

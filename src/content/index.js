@@ -6,9 +6,10 @@ import { ButtonManager, tryAddWintrChessButton } from './buttonManager.js';
 import { PgnExtractor } from './pgnExtractor.js';
 import { initWintrChessAutoPaste } from './wintrchess.js';
 
-function detectDevicePerformance() {
-  STATE.isSlowDevice = false;
-  STATE.performanceFactor = 1;
+function isPageRelevant(platformName) {
+  if (platformName === "lichess") return getLichessPageInfo().isRelevantPage;
+  if (platformName === "chess.com") return getChessComPageInfo().isRelevantPage;
+  return false;
 }
 
 function initializeSupportedPlatform(platformName, getPageInfoFn) {
@@ -32,8 +33,25 @@ function initializeSupportedPlatform(platformName, getPageInfoFn) {
     debouncedTryAddButton();
   });
 
+  // Periodic check that the button is still in the DOM.
+  // On SPA navigation (Chess.com / Lichess), we detect when the page is no longer
+  // relevant and stop polling to avoid resource leaks.
+  let lastUrl = window.location.href;
   const periodicCheckId = setInterval(() => {
     if (document.visibilityState === "hidden") return;
+
+    const currentUrl = window.location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      // URL changed (SPA navigation) — clean up existing buttons.
+      // Don't kill the interval: the user may navigate back to a game page.
+      ButtonManager.removeAllButtons();
+      if (isPageRelevant(platformName)) {
+        tryAddWintrChessButton(platformName);
+      }
+      return;
+    }
+
     if (
       STATE.buttonInstances.size === 0 ||
       (!document.querySelector(".wintchess-button") && !document.querySelector(".wintchess-button-container"))
@@ -54,7 +72,6 @@ function init() {
   if (!STATE.platform) return;
 
   ensureBaseInitialized();
-  detectDevicePerformance();
 
   if (STATE.platform === "lichess") {
     initializeSupportedPlatform("lichess", getLichessPageInfo);

@@ -1,4 +1,3 @@
-import { STATE } from './state.js';
 import { ensureBaseInitialized } from './config.js';
 import { Utils, NotificationManager, getLichessPageInfo, getChessComPageInfo } from './utils.js';
 
@@ -184,10 +183,6 @@ export const PgnExtractor = {
   },
 
   async _extractChessComPgnViaSharePanel() {
-    const getAdjustedDelay = (baseDelay) =>
-      baseDelay *
-      (STATE.isSlowDevice ? Math.max(1.5, STATE.performanceFactor) : 1);
-
     const clickElementWithRetry = async (
       selectors,
       descriptionKey,
@@ -215,9 +210,7 @@ export const PgnExtractor = {
           }
         }
         if (attempt < maxAttempts - 1)
-          await Utils.sleep(
-            getAdjustedDelay(baseAttemptDelay) * (attempt + 1)
-          );
+          await Utils.sleep(baseAttemptDelay * (attempt + 1));
       }
       console.log(
         Utils.getMsg("logSharePanelClickFailed", [
@@ -252,9 +245,7 @@ export const PgnExtractor = {
           }
         }
         if (attempt < maxAttempts - 1)
-          await Utils.sleep(
-            getAdjustedDelay(baseAttemptDelay) * (attempt + 1)
-          );
+          await Utils.sleep(baseAttemptDelay * (attempt + 1));
       }
       return null;
     };
@@ -274,14 +265,14 @@ export const PgnExtractor = {
         !(await clickElementWithRetry(
           shareButtonSelectors,
           "chessComShareButtonAriaLabel",
-          STATE.isSlowDevice ? 8 : 5,
+          5,
           300
         ))
       ) {
         throw new Error(Utils.getMsg("errorSharePanelOpenFailed"));
       }
       sharePanelOpened = true;
-      await Utils.sleep(getAdjustedDelay(STATE.isSlowDevice ? 700 : 400));
+      await Utils.sleep(400);
 
       const pgnTabSelectors = [
         'button#tab-pgn[aria-controls="tabpanel-pgn"]',
@@ -296,37 +287,21 @@ export const PgnExtractor = {
       ) {
         throw new Error(Utils.getMsg("errorPgnTabNotFound"));
       }
-      await Utils.sleep(getAdjustedDelay(STATE.isSlowDevice ? 1000 : 500));
+      await Utils.sleep(500);
 
       const pgn = await extractPgnValue(5, 300);
       if (pgn) return pgn;
       throw new Error(Utils.getMsg("errorPgnTextareaExtractionFailed"));
     } finally {
       if (sharePanelOpened) {
-        try {
-          document.dispatchEvent(
-            new KeyboardEvent("keydown", {
-              key: "Escape",
-              code: "Escape",
-              bubbles: true,
-              cancelable: true,
-            })
-          );
-        } catch (e) {
-          console.log(
-            "[WintrChess Notification] Non-critical error attempting to close share panel:",
-            e.message,
-            ". Trying Escape key as fallback."
-          );
-          document.dispatchEvent(
-            new KeyboardEvent("keydown", {
-              key: "Escape",
-              code: "Escape",
-              bubbles: true,
-              cancelable: true,
-            })
-          );
-        }
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Escape",
+            code: "Escape",
+            bubbles: true,
+            cancelable: true,
+          })
+        );
       }
     }
   },

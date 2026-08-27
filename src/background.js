@@ -1,5 +1,4 @@
-const WINTRCHESS_URL = "https://wintrchess.com/";
-const PGN_STORAGE_KEY = "wintrChessPgnToPaste";
+import { WINTRCHESS_URL, PGN_STORAGE_KEY } from './shared/constants.js';
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "fetchPgn") {

@@ -1,15 +1,7 @@
-import { STATE } from './state.js';
 import { Utils, NotificationManager, chromeStorage } from './utils.js';
 import { CONFIG, ensureBaseInitialized } from './config.js';
 
 export function initWintrChessAutoPaste() {
-  if (STATE.isSlowDevice) {
-    NotificationManager.show(
-      Utils.getMsg("notificationWintrchessPreparingAnalysisSlow"),
-      5000
-    );
-  }
-
   pasteAndAnalyzeOnWintrChess();
   handleAutoFlipOnWintrChess();
 }
@@ -101,12 +93,12 @@ async function pasteAndAnalyzeOnWintrChess() {
     try {
       textarea.focus();
       textarea.value = "";
-      await Utils.sleep(50 * STATE.performanceFactor);
+      await Utils.sleep(50);
       textarea.value = pgnToPaste;
       textarea.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
       textarea.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
 
-      await Utils.sleep(100 * STATE.performanceFactor);
+      await Utils.sleep(100);
 
       if (!button.disabled) {
         button.click();
