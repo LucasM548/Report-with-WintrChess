@@ -1,6 +1,6 @@
 {
   "name": "report-with-wintrchess",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Easily transfer your chess games from **Lichess** and **Chess.com** to **[WintrChess](https://wintrchess.com/)** for in-depth analysis. Available as both a Chrome extension.",
   "main": "index.js",
   "type": "module",
